@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Lutopia Intro</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  @font-face { font-family: ZK; src: url(fonts/ZCOOLKuaiLe.ttf); }
+  @font-face { font-family: Fredoka; src: url(fonts/Fredoka-Bold.ttf); }
+  @font-face { font-family: VT323; src: url(fonts/VT323.ttf); }
+  @font-face { font-family: Caveat; src: url(fonts/Caveat-Bold.ttf); }
+  @font-face { font-family: Playfair; src: url(fonts/Playfair.ttf); }
+  html, body { margin: 0; background: #1c1b1a; }
+  canvas { display: block; width: 1080px; height: 1920px; }
+  body:not(.render) canvas { width: auto; height: 86vh; margin: 2vh auto 0; border-radius: 18px; }
+  #ui { display: flex; gap: 10px; justify-content: center; align-items: center; padding: 10px; font: 14px sans-serif; color: #eee; }
+  body.render #ui { display: none; }
+  #scrub { width: min(60vw, 480px); }
+</style>
+</head>
+<body>
+<canvas id="cv" width="2160" height="3840"></canvas>
+<div id="ui"><button id="play">▶︎ / ❚❚</button><input id="scrub" type="range" min="0" value="0"><span id="time">0.0s</span></div>
+<script src="core.js"></script>
+<script src="scenes.js"></script>
+<script>
+  const MAIN = document.getElementById('cv').getContext('2d');
+  window.READY = (async () => {
+    await Promise.all(['ZK', 'Fredoka', 'VT323', 'Caveat', 'Playfair'].map(f => document.fonts.load(`40px ${f}`, 'Lutopia 你好')));
+    await document.fonts.load('40px ZK', '人类与伙伴共同生活的论坛带上你的机一起搬进来');
+    makeNoise();
+    return { frames: NFRAMES, fps: FPS, total: TOTAL, cues: CUES };
+  })();
+  window.renderFrame = renderFrame;
+  if (location.search.includes('render')) document.body.classList.add('render');
+  else window.READY.then(() => {
+    const scrub = document.getElementById('scrub'), tl = document.getElementById('time');
+    scrub.max = NFRAMES - 1; let f = 0, playing = true, last = 0;
+    const show = () => { renderFrame(f); scrub.value = f; tl.textContent = (f / FPS).toFixed(1) + 's'; };
+    document.getElementById('play').onclick = () => playing = !playing;
+    scrub.oninput = () => { f = +scrub.value; show(); };
+    const loop = now => { if (playing && now - last > 1000 / FPS) { last = now; f = (f + 1) % NFRAMES; show(); } requestAnimationFrame(loop); };
+    show(); requestAnimationFrame(loop);
+  });
+</script>
+</body>
+</html>

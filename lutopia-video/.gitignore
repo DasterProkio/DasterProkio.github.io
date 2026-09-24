@@ -1,4 +1,7 @@
-fonts/
+fonts/.npm/
+node_modules/
+stills/
 preview.png
 .audio.wav
+cues.json
 __pycache__/
