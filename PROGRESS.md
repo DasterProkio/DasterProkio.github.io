@@ -249,3 +249,42 @@ Running production log. Newest entries at the bottom of each section.
 - Tea foam colour toned down (lime in direct sun).
 - Remaining: the bowl at the fire peak is still fairly flat (acceptable: the kiln interior
   is near-isothermal); nights are dark (brief now).
+
+## Review pass 4 (53 frames at 1280×536, every 5 s)
+- Fire holds at full resolution: licks → roaring wall → white peak → embers → dawn.
+- Ensō touch-down read as a figure-8 (pool, thin neck, head). Pressure now starts at 0.75.
+- Tea in direct noon sun was lime; foam toned down.
+- Score: 17 clipped samples at the impact and the climax. The WaveShaper clamps its input
+  to [-1,1], so the tanh curve hard-clipped. Now: pre-gain 0.62 and curve 0.97·tanh(2.5x),
+  same small-signal gain, soft saturation. Result: peak 0.899, 0 clipped, climax still the
+  loudest stretch (−9.8 dB RMS at bar 62).
+- **Performance budget**: relative per-pixel cost per scene, measured from SwiftShader frame
+  times at 1280×536 (post baseline subtracted, life = 1):
+
+  | scene | cost | scale at k=0.9 |
+  |---|---|---|
+  | enso | 0.35 | 1.00 |
+  | studio | 1.0 | 0.90 |
+  | life / mended | 1.0 | 0.90 |
+  | seam | 1.7 | 0.70 |
+  | kiln | 2.0 | 0.65 |
+  | break | 2.6 | 0.55 |
+
+  Dynamic resolution now renders at `k/√cost` (a transition pays for both scenes), quantised
+  to 0.05 so targets are not reallocated every frame; the controller adapts only `k`. A cut
+  into the break scene drops resolution on the same frame instead of stuttering for seconds
+  while a scalar controller catches up. The DOF, bloom and TAA-free post chain run at the
+  same scaled resolution. Absolute 60 fps could not be measured here (no GPU in the build
+  container); the budget makes the film degrade in resolution, never in frame rate.
+
+## Review pass 5 (52 frames at 1280×536, offset grid 2.5, 7.5, … to catch in-betweens)
+- Nothing structural. Lip of the bowl at dawn still showed a ragged glint (the lattice
+  reflection over the thin rim glaze): lip coat roughness raised to 0.3.
+- Checked: the dive into the crack (≈185 s) is a deliberate 2–3 s passage of darkness with
+  one gold-edged shard; kept.
+
+## State
+All pass-1 issues closed; passes 2–5 found progressively smaller problems, the last pass
+only one polish item. Known limits: the bowl at the fire's peak is fairly flat (the kiln
+interior is near-isothermal, so it is honest); nights are dark but now brief; the Japanese
+title uses whatever Mincho/serif the OS has.

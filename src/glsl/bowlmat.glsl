@@ -114,6 +114,7 @@ Surf bowlSurface(vec3 p, vec3 n, vec3 v){
     float coat = cov*uMelt;
     s.coat = max(s.coat, coat);
     s.coatRough = mix(s.coatRough, 0.1, coat);          // satin celadon: soft reflections, never a mirrored lattice
+    s.coatRough = mix(s.coatRough, 0.3, smoothstep(0.93, 0.99, h.s)*coat);   // thin glaze over the lip: matte-ish, no ragged glints
     vec3 cn = n;
     BUMP(cn, p, glazeRipple, 0.004, 0.0004*uMelt);
     s.cn = normalize(mix(s.cn, cn, coat));
