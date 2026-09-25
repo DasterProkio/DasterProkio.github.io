@@ -1545,10 +1545,10 @@ const Score = (() => {
       const hp = off.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 28;
       const comp = off.createDynamicsCompressor();
       comp.threshold.value = -12; comp.ratio.value = 2; comp.attack.value = 0.02; comp.release.value = 0.3; comp.knee.value = 10;
-      const out = off.createGain(); out.gain.value = 1.1;
+      const out = off.createGain(); out.gain.value = 0.62;   // pre-shaper: the curve saturates before the shaper's input clamp
       const clip = off.createWaveShaper();
       const curve = new Float32Array(2048);
-      for (let i = 0; i < 2048; i++) { const x = i / 1023.5 - 1; curve[i] = Math.tanh(x * 1.1) / Math.tanh(1.1); }
+      for (let i = 0; i < 2048; i++) { const x = i / 1023.5 - 1; curve[i] = 0.97 * Math.tanh(x * 2.5); }
       clip.curve = curve;
       dry.connect(hp); wet.connect(conv); conv.connect(wetG); wetG.connect(hp);
       hp.connect(comp); comp.connect(out); out.connect(clip); clip.connect(off.destination);
