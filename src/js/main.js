@@ -34,11 +34,19 @@
   }
 
   // ---------------------------------------------------------------- render one frame
-  let lastOverlay = null;
-  let dyn = 0.85;
-  function renderAt(t, scale) {
+  // Per-scene performance budget. Relative per-pixel cost of each scene (measured with
+  // SwiftShader, life = 1); a transition pays for both scenes. The render scale is
+  // k / sqrt(cost), so a cut into an expensive scene drops resolution on the same frame,
+  // and the controller only has to learn one number, k, for the machine.
+  const COST = { enso: 0.35, studio: 1.0, kiln: 2.0, life: 1.0, break: 2.6, seam: 1.7 };
+  const frameCost = f => (COST[f.a.scene] || 1) + (f.b && f.mix > 0 ? (COST[f.b.scene] || 1) : 0);
+  let lastOverlay = null, lastScale = 0;
+  let dyn = 0.9;                       // the budget k
+  function renderAt(t, k, fixed) {
     const f = Film.frameAt(t);
-    const s = Math.min(scale, (f.post.scaleMax || 1.0));
+    let s = fixed ? k : Math.min(1.0, Math.max(0.35, k / Math.sqrt(frameCost(f))));
+    s = Math.min(Math.round(s * 20) / 20, f.post.scaleMax || 1.0);   // quantised: targets are not reallocated every frame
+    lastScale = s;
     R.resize(canvas.width, canvas.height, s);
     if (f.overlay && f.overlay !== lastOverlay) { R.setOverlay(f.overlay); lastOverlay = f.overlay; }
     R.frame(f);
@@ -56,7 +64,7 @@
         const vals = v.split(';').map(Number);
         Film.override[k] = vals.length > 1 ? vals : vals[0];
       }
-      renderAt(+ts, +(params.get('scale') || 1)); R.gl.finish(); return 't=' + ts;
+      renderAt(+ts, +(params.get('scale') || 1), true); R.gl.finish(); return 't=' + ts;
     };
     window.__duration = Film.DURATION;
     window.__ready = true;
@@ -122,14 +130,14 @@
     frames++;
     // dynamic resolution: keep frame time under ~16.7 ms
     if (frames > 30 && frames % 10 === 0) {
-      if (avg > 18.0) dyn = Math.max(0.35, dyn * 0.93);
-      else if (avg < 15.2) dyn = Math.min(1.0, dyn * 1.03);
+      if (avg > 18.0) dyn = Math.max(0.3, dyn * 0.93);
+      else if (avg < 15.2) dyn = Math.min(1.7, dyn * 1.03);
     }
     const t = now();
     renderAt(t, dyn);
     if (dbg) {
       dbg.querySelector('input').value = t;
-      dbg.querySelector('span').textContent = t.toFixed(2) + 's  bar ' + (t / TL.BAR).toFixed(2) + '  ' + (1000 / avg).toFixed(0) + 'fps  scale ' + dyn.toFixed(2);
+      dbg.querySelector('span').textContent = t.toFixed(2) + 's  bar ' + (t / TL.BAR).toFixed(2) + '  ' + (1000 / avg).toFixed(0) + 'fps  scale ' + lastScale.toFixed(2) + '  k ' + dyn.toFixed(2);
     }
     if (t < Film.DURATION + 1.0 || debug) requestAnimationFrame(loop);
     else { ui.classList.remove('gone'); ui.classList.add('end'); }

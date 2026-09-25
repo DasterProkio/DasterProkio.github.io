@@ -31,7 +31,7 @@ float paperHeight(vec2 p){
 
 // brush pressure along the stroke (0..1 arc parameter)
 float pressure(float u){
-  float touch = smoothstep(0.0,0.03,u);
+  float touch = mix(0.75, 1.0, smoothstep(0.0,0.03,u));   // the brush lands already loaded: no neck after the pool
   float body = mix(1.25, 0.8, smoothstep(0.02,0.35,u)) * mix(1.0, 0.55, smoothstep(0.55,1.0,u));
   return touch*body;
 }

@@ -326,7 +326,7 @@ vec3 teaShade(vec3 p, vec3 v, Mem m, float froth){
   float foam = froth*smoothstep(1.02, 0.78, rr + 0.14*fbm(u*6.0,3));
   foam *= 0.88 + 0.12*smoothstep(-0.2, 0.3, fbm(u*14.0,3));
   vec3 liquid = vec3(0.08,0.14,0.02);
-  vec3 foamC = vec3(0.37,0.47,0.19)*(0.88+0.12*smoothstep(0.03,0.2,b2))*(0.9+0.1*smoothstep(0.08,0.35,b1));
+  vec3 foamC = vec3(0.34,0.42,0.19)*(0.88+0.12*smoothstep(0.03,0.2,b2))*(0.9+0.1*smoothstep(0.08,0.35,b1));
   vec3 base = mix(liquid, foamC, foam);
   Surf s = defaultSurf(n);
   s.alb = base; s.rough = mix(0.3, 0.75, foam); s.coat = 1.0-foam*0.85; s.coatRough = 0.05;
