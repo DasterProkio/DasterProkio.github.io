@@ -51,7 +51,7 @@ Surf bowlSurface(vec3 p, vec3 n, vec3 v){
 
   float firedAmt = max(uMelt, uHeat);
   // iron shows through where the glaze thins over the rim: a warm brown lip, not raw grain
-  fired = mix(fired, vec3(0.30,0.19,0.12)*(0.95+0.05*grain), smoothstep(0.9, 0.995, h.s)*0.85);
+  fired = mix(fired, vec3(0.30,0.19,0.12)*(0.95+0.05*grain), smoothstep(0.955, 0.997, h.s)*0.8);
   vec3 body = mix(raw, h.side<-1.5 ? footCol : fired, sat(firedAmt*1.5));
   s.alb = body;
   s.rough = 0.85;
@@ -61,7 +61,7 @@ Surf bowlSurface(vec3 p, vec3 n, vec3 v){
   if(uWet>0.0){
     float film = uWet*(0.55+0.45*slurry);
     s.coat = film;
-    s.coatRough = mix(0.32, 0.12, slurry);
+    s.coatRough = mix(0.16, 0.05, slurry);
     s.alb = mix(s.alb, s.alb*0.7, film);
     s.cn = n;
     // throwing lines in the film
@@ -124,7 +124,9 @@ Surf bowlSurface(vec3 p, vec3 n, vec3 v){
 
   // ---------- incandescence
   if(uHeat>0.0){
-    float T = mix(800.0, 1330.0, uHeat);
+    // thin walls and the rim run hotter than the foot; the glaze shimmers as it boils
+    float T = mix(800.0, 1330.0, uHeat) + 90.0*uHeat*(h.s-0.55) + 25.0*uHeat*gnoise(p*18.0+vec3(0.0,uTime*0.6,0.0))
+            + 70.0*uHeat*uMelt*(fbm(vec3(p.xz*5.0, p.y*9.0+uTime*0.25), 3));   // molten glaze running down
     s.emit = blackbody(T)*pow(uHeat,2.2)*2.5*(0.85+0.15*grain);
   }
 

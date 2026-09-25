@@ -131,20 +131,20 @@ void main(){
                  + s.coat*(specGGX(s.cn, v, L, s.coatRough, vec3(0.04))*key + voidEnv(reflect(-v,s.cn))*F_Schlick1(0.04,nv))
                  + specGGX(s.n, v, L, s.rough, s.f0)*key;
       // rim
-      voidL += s.alb*vec3(0.5,0.55,0.7)*pow(1.0-nv, 4.0)*0.6;
+      voidL += s.alb*vec3(0.5,0.55,0.7)*pow(1.0-nv, 4.0)*0.3;
       lit = mix(roomL, voidL, uVoid);
       // memory window
       float strength = uPortal*uShardN[i].w;
       if(strength>0.0){
-        float inner = smoothstep(-0.003, -0.035, cd);
+        float inner = smoothstep(-0.0015, -0.012, cd);
         float glazed = sat(glazeThickness(q, bowlInfo(q))*3.0);
         vec3 mem = portalView(i, q, qinv(Q, rd));
         float F = F_Schlick1(0.04, nv);
         vec3 tint = mix(vec3(1.0), vec3(0.82,1.0,0.93), 0.35);
-        float k = strength*inner*glazed*(1.0-F);
-        lit = mix(lit, mem*tint*1.7 + s.coat*specGGX(s.cn, v, L, s.coatRough, vec3(0.04))*key*0.5, k);
+        float k = strength*inner*mix(0.8, 1.0, glazed)*(1.0-F);
+        lit = mix(lit, mem*tint*1.25 + s.coat*specGGX(s.cn, v, L, s.coatRough, vec3(0.04))*key*0.5, k);
         // luminous edge where the memory meets the break
-        lit += vec3(1.0,0.72,0.38)*strength*glazed*exp(-abs(cd+0.004)*260.0)*0.9;
+        lit += vec3(1.0,0.72,0.38)*strength*exp(-abs(cd+0.003)*700.0)*0.45;
       }
     } else {
       // exposed clay body with the thin glaze line at the surface

@@ -122,11 +122,14 @@ vec3 studioShade(vec3 p, vec3 rd, float id){
     // wheel head covered in slip, rotating
     vec3 q = rotYv(p, uWheelSpin);
     float r = length(q.xz), a = atan(q.z,q.x);
-    float smear = sat(0.5+0.8*gnoise(vec3(a*5.0, r*6.0, 0.0)));
-    float rings = 0.5+0.5*sin(r*40.0);
-    s.alb = mix(vec3(0.07,0.04,0.028), vec3(0.14,0.09,0.06), smear*0.6)*(0.9+0.1*rings);
+    // slip smeared around by the spin: long along the circumference, short across it
+    vec2 cs = vec2(cos(a), sin(a));
+    float smear = sat(0.5+0.9*gnoise(vec3(cs*1.2, r*18.0)) + 0.35*gnoise(vec3(cs*3.0, r*55.0)));
+    float rings = 0.5+0.5*sin(r*46.0 + 1.5*gnoise(vec3(cs*2.0, r*4.0)));
+    s.alb = mix(vec3(0.075,0.055,0.045), vec3(0.15,0.115,0.09), smear)*(0.85+0.15*rings);
+    s.n = normalize(n + vec3(cs.x, 0.0, cs.y)*0.05*(rings-0.5)*uWater);
     s.alb = mix(s.alb, vec3(0.35,0.36,0.37), smoothstep(1.45,1.6,r)*0.8);   // metal rim
-    s.coat = uWater*(0.4+0.6*smear); s.coatRough = 0.12; s.rough = 0.7;
+    s.coat = uWater*(0.5+0.5*smear); s.coatRough = mix(0.14, 0.05, smear); s.rough = 0.7; s.cn = s.n;
   } else if(id==3.0){
     s = defaultSurf(n);
     s.alb = vec3(0.08,0.07,0.065); s.rough = 0.4; s.coat = 0.3; s.coatRough = 0.3;

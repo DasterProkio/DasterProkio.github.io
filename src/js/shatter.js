@@ -54,14 +54,14 @@ const Shatter = (() => {
   // The remembered moments. Each shard shows one.
   // day, season, two, candle | gap, open, tea, ring | cam az, el, dist, fov
   const M = {
-    first:   [[0.30, 0.05, 0, 0], [1.45, 0.35, 0.6, 0], [0.35, 0.10, 3.3, 1.15]],   // the first morning, alone, new
-    spring:  [[0.36, 0.20, 1, 0], [1.45, 0.50, 0.6, 0], [0.55, 0.09, 3.5, 1.22]],   // two bowls, blossom
-    summer:  [[0.52, 1.00, 1, 0], [1.10, 0.70, 0.5, 0], [-0.4, 0.14, 3.1, 1.22]],   // noon, green
-    rain:    [[0.45, 1.40, 1, 0], [1.00, 0.20, 0.6, 0], [0.9, 0.05, 2.7, 1.15]],    // grey afternoon
-    autumn:  [[0.70, 2.10, 1, 0], [0.95, 0.60, 0.6, 0], [0.2, 0.08, 3.1, 1.15]],    // low gold sun, maple
+    first:   [[0.30, 0.05, 0, 0], [1.45, 0.6, 0.6, 0], [0.35, 0.10, 3.3, 1.15]],   // the first morning, alone, new
+    spring:  [[0.36, 0.20, 1, 0], [1.45, 1.0, 0.6, 0], [0.2, 0.09, 3.5, 1.22]],   // two bowls, blossom
+    summer:  [[0.52, 1.00, 1, 0], [1.10, 1.0, 0.5, 0], [-0.25, 0.1, 3.1, 1.22]],   // noon, green
+    rain:    [[0.45, 1.40, 1, 0], [1.00, 0.6, 0.6, 0], [0.5, 0.05, 2.7, 1.15]],    // grey afternoon
+    autumn:  [[0.70, 2.10, 1, 0], [0.95, 1.0, 0.6, 0], [0.1, 0.08, 3.1, 1.15]],    // low gold sun, maple
     candle:  [[0.93, 2.90, 1, 1], [0.86, 0.00, 0.6, 0], [0.6, 0.14, 3.7, 1.30]],    // winter night by candle
-    touch:   [[0.40, 0.30, 1, 0], [0.84, 0.50, 0.6, 0], [0.0, 0.11, 2.5, 1.09]],    // spring again: touching
-    late:    [[0.62, 2.40, 1, 0], [0.84, 0.40, 0.3, 0], [-0.7, 0.10, 3.1, 1.15]],   // late autumn afternoon
+    touch:   [[0.40, 0.30, 1, 0], [0.84, 0.8, 0.6, 0], [0.0, 0.11, 2.5, 1.09]],    // spring again: touching
+    late:    [[0.62, 2.40, 1, 0], [0.84, 0.7, 0.3, 0], [-0.4, 0.10, 3.1, 1.15]],   // late autumn afternoon
   };
   const ORDER = ['first', 'spring', 'summer', 'autumn', 'candle', 'touch', 'rain', 'late', 'spring', 'summer', 'autumn', 'candle', 'touch', 'first'];
 

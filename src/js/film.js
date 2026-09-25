@@ -8,7 +8,7 @@ const Film = (() => {
 
   // ---------------------------------------------------------------- the acts (seconds)
   const ENSO0 = 0, CLAY0 = bar(6), FIRE0 = bar(17), LIFE0 = bar(29), BRK0 = bar(47), SEAM0 = bar(56), MEND0 = bar(67), END0 = bar(72.5);
-  const DURATION = bar(76);
+  const DURATION = bar(78);
 
   const TEN_PROFILE = (() => {
     const P = [[0.0, 0.07, 0.03], [0.12, 0.075, 0.03], [0.3, 0.2, 0.026], [0.46, 0.42, 0.022], [0.54, 0.6, 0.02], [0.555, 0.64, 0.018]];
@@ -31,15 +31,31 @@ const Film = (() => {
     const c = document.createElement('canvas');
     c.width = 2048; c.height = Math.round(2048 / Engine.ASPECT);
     const g = c.getContext('2d');
-    const serif = '"Iowan Old Style","Palatino Linotype",Palatino,"Hiragino Mincho ProN","Yu Mincho","Noto Serif CJK JP",Georgia,serif';
-    g.fillStyle = 'rgba(46,36,26,0.9)';
+    const serif = '"Hiragino Mincho ProN","Yu Mincho","Noto Serif CJK JP","Noto Serif JP","Source Han Serif","MS Mincho","Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif';
+    // the ensō spans x 694..1354 (canvas px); the title stands in the right margin, written downward
+    const x = 1585, y0 = 262, step = 104;
+    g.fillStyle = 'rgba(22,17,13,0.94)';
     g.textAlign = 'center'; g.textBaseline = 'middle';
-    const cx = c.width * 0.5, cy = c.height * 0.5;
-    g.font = '400 54px ' + serif;
-    g.fillText('金継ぎ', cx, cy + 262);
-    g.font = '400 28px ' + serif;
-    if ('letterSpacing' in g) g.letterSpacing = '16px';
-    g.fillText('KINTSUGI', cx + 8, cy + 330);
+    g.font = '400 92px ' + serif;
+    ['金', '継', 'ぎ'].forEach((ch, i) => g.fillText(ch, x, y0 + i * step));
+    // the seal: vermilion, with 継 cut out of it so the paper shows through
+    const sy = y0 + 3 * step + 18, S = 62;
+    g.fillStyle = 'rgba(168,34,22,0.9)';
+    g.beginPath();
+    const r = 7;
+    g.moveTo(x - S / 2 + r, sy); g.arcTo(x + S / 2, sy, x + S / 2, sy + S, r); g.arcTo(x + S / 2, sy + S, x - S / 2, sy + S, r);
+    g.arcTo(x - S / 2, sy + S, x - S / 2, sy, r); g.arcTo(x - S / 2, sy, x + S / 2, sy, r); g.fill();
+    g.globalCompositeOperation = 'destination-out';
+    g.font = '700 44px ' + serif;
+    g.fillText('継', x, sy + S / 2 + 2);
+    // worn stamp: a few specks where the seal did not take
+    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    for (let i = 0; i < 40; i++) { g.beginPath(); g.arc(x - S / 2 + rnd() * S, sy + rnd() * S, 0.8 + rnd() * 1.8, 0, 6.3); g.fill(); }
+    g.globalCompositeOperation = 'source-over';
+    g.fillStyle = 'rgba(40,32,24,0.8)';
+    g.font = '400 22px "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif';
+    if ('letterSpacing' in g) g.letterSpacing = '9px';
+    g.fillText('KINTSUGI', x + 5, sy + S + 46);
     titleCanvas = c;
     return c;
   }
@@ -131,28 +147,34 @@ const Film = (() => {
 
   // ================================================================ FIRE
   const fire = (() => {
-    const fireK = track([[0, 0.35], [5, 1.0, 'io'], [26, 1.0], [30, 0.0, 'in']]);
-    const wallK = track([[0, 0.35], [10, 0.9, 'io'], [26, 1.0], [33, 0.0, 'out']]);
-    const heat = track([[2, 0.0], [20, 0.95, 'io'], [26, 1.0], [34, 0.0, 'out']]);
+    // arc: darkness and a few licks -> the build -> white heat -> the fire dies -> dawn at the door
+    const fireK = track([[0, 0.12], [5, 0.3, 'io'], [15, 0.72, 'io'], [21, 1.0, 'io'], [26, 1.0], [29.5, 0.0, 'in']]);
+    const wallK = track([[0, 0.0], [6, 0.18, 'in'], [16, 0.65, 'io'], [22, 1.0, 'io'], [26, 1.0], [33, 0.0, 'out']]);
+    const white = track([[18, 0], [21.5, 1.0, 'io'], [24.5, 1.0], [27.5, 0.0, 'io']]);
+    const heat = track([[4, 0.0], [20, 0.95, 'io'], [26, 1.0], [34, 0.0, 'out']]);
     const melt = track([[10, 0.0], [21, 1.0, 'io']]);
     const ash = track([[4, 0.0], [24, 0.55, 'io']]);
-    const ember = track([[26, 0], [30, 1.0], [37, 0.0]]);
+    const ember = track([[25, 0], [30, 1.0, 'io'], [40, 0.35, 'io']]);
     const door = track([[31, 0], [38, 1.0, 'io']]);
     const crackle = track([[32, 0], [39, 1.0, 'lin']]);
-    const camPath = path([[2.4, 1.3, -0.9], [2.0, 1.0, -1.8], [1.2, 0.8, -2.4], [0.7, 0.8, -2.0], [0.4, 0.85, -1.6]]);
-    const camU = track([[0, 0], [26, 0.6, 'io'], [40, 1.0, 'io']]);
+    const expo = track([[0, 1.3], [12, 0.95, 'io'], [22, 0.58, 'io'], [26, 0.58], [31, 0.85, 'io'], [36, 1.0, 'io']]);
+    // camera: from the studio's last view, down to the floor among the first flames, a slow
+    // push toward the rim as the glaze melts, then back as the door opens
+    const camPath = path([[2.4, 1.3, -0.9], [2.0, 0.4, -2.5], [1.25, 0.42, -2.55], [0.8, 0.62, -2.0], [0.55, 0.78, -1.7], [0.4, 0.85, -1.6]]);
+    const camU = track([[0, 0], [7, 0.25, 'io'], [22, 0.55, 'io'], [30, 0.72, 'io'], [38, 1.0, 'io']]);
+    const tgtT = track([[0, [0, 0.35, 0]], [7, [-0.1, 0.5, 0.7], 'io'], [22, [-0.1, 0.45, 0.3], 'io'], [30, [0, 0.42, 0.15], 'io'], [38, [0.05, 0.45, 0.2], 'io']]);
     return (t) => {
       const lt = t - FIRE0;
-      const eye = camPath(camU(lt)), tgt = V.mix([0, 0.35, 0], [0.05, 0.45, 0.2], sm(30, 40, lt));
+      const eye = camPath(camU(lt)), tgt = tgtT(lt);
       return {
         scene: 'kiln',
         bag: Object.assign({}, BOWL_BASE, {
           uTime: t, uLocal: lt, uWet: 0, uDry: 1, uGlazeRaw: 1, uMelt: melt(lt), uHeat: heat(lt), uAsh: ash(lt),
           uCrackle: crackle(lt), uStain: 0, uGold: 0,
-          uFire: fireK(lt), uWallT: wallK(lt), uDoor: door(lt), uEmber: ember(lt),
+          uFire: fireK(lt), uWallT: wallK(lt), uDoor: door(lt), uEmber: ember(lt), uWhite: white(lt),
         }),
         cam: { eye, tgt, fov: 0.34 },
-        post: grade('fire', { exposure: mix(0.55, 1.0, sm(27, 33, lt)), shimmer: fireK(lt) }),
+        post: grade('fire', { exposure: expo(lt), shimmer: fireK(lt) * (0.4 + 0.6 * white(lt)) }),
       };
     };
   })();
@@ -172,12 +194,17 @@ const Film = (() => {
     const HOLD = [0.3, 1.8, -5.15];
     const liftP = track([[50, [0, 0, 0]], [53.0, HOLD, 'io']]);
     const cam = path([
-      [0.4, 0.85, -1.6], [1.2, 1.2, -3.0], [2.2, 1.45, -3.6], [2.9, 1.5, -2.8], [3.2, 1.55, -1.7],
+      [0.4, 0.85, -1.6], [0.95, 0.78, -2.45], [1.8, 0.82, -2.65], [2.45, 0.88, -2.0], [2.7, 0.92, -1.15],
     ]);
     const camU = track([[-3.4, 0], [5, 0.28, 'io'], [43.3, 1.0, 'sine']]);
     return (t) => {
       const lt = t - LIFE0;
-      const d = D(lt), day = d - Math.floor(d), dayN = Math.floor(d);
+      // time-lapse warp: nights pass quickly, days linger (no strobing at 3.5 s/day)
+      const d0 = D(lt), dayN = Math.floor(d0), fr = d0 - dayN;
+      const wk = sm(4, 6, lt) * (1 - sm(41, 43.3, lt));
+      const nightFast = fr < 0.1 ? fr / 0.1 * 0.21 : fr > 0.9 ? 0.79 + (fr - 0.9) / 0.1 * 0.21 : 0.21 + (fr - 0.1) / 0.8 * 0.58;
+      const day = mix(fr, nightFast, wk);
+      const d = dayN + day;
       const s = season(lt);
       const two = (dayN >= 1 && dayN < 11) ? 1 : 0;          // the tenmoku arrives on day 1, is gone after day 10
       // tea each morning, drunk through the day
@@ -219,7 +246,7 @@ const Film = (() => {
       if (lt > 56.0) { // crane down to the floor to meet the fall
         const k = sm(56.0, 60.0, lt);
         eye = V.mix(eye, [1.5, -2.72, -8.1], k);
-        tgt = V.mix(tgt, V.add(P_IMP, [0, 0.35, 0.1]), sm(56.5, 59.6, lt));
+        tgt = V.add(off, [0, 0.45 - 0.1 * sm(57, 60, lt), 0]);     // keep the falling bowl in frame
       }
       const m = {
         uMemDay: day, uMemSeason: s, uMemTwo: two, uMemGap: gap, uMemCandle: candle, uMemSteam: 1, uMemTea: tea, uMemTea2: tea2,
@@ -256,7 +283,7 @@ const Film = (() => {
       const p = shardPos(P0, MEM_SHARDS[k]);
       const o = origin(lt);
       const out = V.norm(V.add(V.sub(p, o), [0, 0.35, 0]));
-      plan.push({ lt, p, eye: V.add(p, V.mul(out, 1.15)) });
+      plan.push({ lt, p, eye: V.add(p, V.mul(out, 0.85)) });
     }
     // final approach into the crack (matches the seam scene's first frame)
     const SEAMP = Bowl.traceSeam(0.40, -1.03, 44, 0.008).slice(4);
@@ -323,7 +350,8 @@ const Film = (() => {
     const SEAMP = Bowl.traceSeam(0.40, -1.03, 44, 0.008).slice(4);
     const seamPos = path(SEAMP.map(q => q.p));
     const seamNrm = path(SEAMP.map(q => q.n));
-    const alt = track([[0, 0.010], [11, 0.014, 'sine'], [27, 2.9, 'io3']]);
+    const alt = track([[0, 0.010], [11, 0.014, 'sine'], [27, 2.3, 'io3']]);
+    const glory = track([[13, 0], [20, 1.0, 'io'], [34, 1.0]]);
     const tgtBlend = track([[12, 0], [25, 1, 'io']]);
     const orbit = track([[27, 0], [36.7, 0.5, 'io']]);
     return (t) => {
@@ -352,6 +380,7 @@ const Film = (() => {
         bag: Object.assign({}, BOWL_BASE, {
           uTime: t, uLocal: lt, uStain: 0.7, uGold: 0, uGap: 0.0016, uFlow: flow, uSource: src, uCool: 0.45,
           uKeyDir: key, uRoomLight: sm(29, 36.7, lt), uAlt: A,
+          uGlory: glory(lt), uGloryDir: V.norm([-farDir[0], 0.35, -farDir[2]]),
         }),
         cam: { eye, tgt, fov: 0.36, up },
         post: grade('seam', { focus }),
@@ -390,7 +419,7 @@ const Film = (() => {
       scene: 'enso',
       bag: { uTime: t, uStroke: stroke, uWet: 0, uGoldInk: 1, uZoom: 1.3, uCenter: [0, 0], uPaperL: 1.0, uFadeInk: 0 },
       cam: null,
-      post: grade('enso', { overlay: sm(bar(74.7), bar(75.4), t), fade: 1 - sm(DURATION - 1.6, DURATION, t) }),
+      post: grade('enso', { overlay: sm(bar(74.7), bar(75.4), t), fade: 1 - sm(DURATION - 3.5, DURATION - 0.2, t) }),
       overlay: true,
     };
   };

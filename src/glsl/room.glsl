@@ -58,7 +58,7 @@ vec3 sunColor(Mem m){
 }
 vec3 skyColor(Mem m, float up){
   float d = sunUp(m);
-  vec3 night = vec3(0.012,0.016,0.03);
+  vec3 night = vec3(0.05,0.075,0.14);            // moonlight: nights are blue, never black
   vec3 dayc = mix(vec3(0.45,0.58,0.8), vec3(0.62,0.66,0.72), smoothstep(2.4,3.0,m.season));
   vec3 c = mix(night, dayc*(0.6+0.4*up), d);
   float dusk = sat(1.0-abs(m.day-0.25)*12.0)+sat(1.0-abs(m.day-0.75)*12.0);
@@ -102,7 +102,7 @@ vec3 garden(vec3 ro, vec3 rd, Mem m){
   vec3 leaf = s<1.0 ? mix(spring,summer,smoothstep(0.3,1.0,s)) : s<2.0 ? mix(summer,autumn,smoothstep(1.3,2.0,s)) : mix(autumn,winter,smoothstep(2.1,2.6,s));
   float bare = smoothstep(2.2,2.7,s);
   vec3 sunc = sunColor(m);
-  vec3 lit = sunc*0.1 + skyColor(m,1.0)*0.45;
+  vec3 lit = sunc*0.2 + skyColor(m,1.0)*0.65;
   // foliage mass: soft, low frequency
   float mass = fbm(g*vec2(1.2,1.6)+vec2(1.7,0.3), 4)*0.9 + 0.25 - 0.35*g.y;
   float leafy = smoothstep(-0.05,0.25,mass)*(1.0-0.85*bare);
@@ -209,9 +209,9 @@ vec3 roomAmbient(vec3 p, vec3 n, Mem m){
   vec3 sky = skyColor(m, 0.7);
   float toWall = sat(n.z*0.6+0.4);
   float near = 1.0/(1.0+0.02*sq(WALLZ-p.z));
-  vec3 a = sky*(0.03 + 0.55*toWall*toWall*near)*(0.7+0.3*sat(n.y));
+  vec3 a = sky*vec3(1.0,0.92,0.8)*(0.05 + 0.6*toWall*toWall*near)*(0.7+0.3*sat(n.y));
   // warm bounce from the room behind the camera (sunlit tatami, plaster)
-  a += (sky*0.06 + sunColor(m)*0.012)*vec3(1.0,0.85,0.7)*sat(-n.z*0.7+0.3);
+  a += (sky*0.22 + sunColor(m)*0.035)*vec3(1.0,0.85,0.7)*sat(-n.z*0.7+0.3);
   a += sunColor(m)*0.015*sat(-n.y*0.5+0.5)*0.5;  // bounce from sunlit floor
   return a;
 }
@@ -228,7 +228,7 @@ vec3 woodTable(vec3 p){
   float warp = fbm(u*vec2(0.18,0.9),3);
   float ring = fract((u.y+warp*1.8)*1.6 + 0.3*fbm(u*vec2(0.06,0.5),2));
   float grain = smoothstep(0.0,0.3,ring)*smoothstep(1.0,0.55,ring);
-  vec3 c = mix(vec3(0.075,0.042,0.024), vec3(0.15,0.085,0.045), grain);
+  vec3 c = mix(vec3(0.15,0.085,0.045), vec3(0.27,0.16,0.085), grain);
   c *= 0.8+0.3*sat(fbm(u*vec2(0.5,14.0),3)+0.5);
   return c;
 }
@@ -400,7 +400,7 @@ vec4 roomTrace(vec3 ro, vec3 rd, Mem m, int steps){
         vec3 tq = tenLocal(p, m);
         float rr = length(tq.xz);
         s.alb *= 1.0 - 0.35*m.ring*smoothstep(0.03,0.0,abs(rr-0.2))*step(p.y,0.01);
-        s.rough = 0.55; s.coat = 0.35; s.coatRough = 0.16;
+        s.rough = 0.55; s.coat = 0.14; s.coatRough = 0.28;
         col = roomLightSurf(s, p, v, m, ao);
       } else if(h.y==4.0){
         col = wallRadiance(p, rd, m);

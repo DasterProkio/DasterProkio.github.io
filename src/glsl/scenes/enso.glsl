@@ -69,7 +69,10 @@ vec2 ensoInk(vec2 p){
   float capR = 0.13*1.05;
   float pool = smoothstep(capR, capR*0.8, length(p-sp) + 0.012*gnoise(p*30.0) + 0.01*(fiberField(p*1.3)-0.5))*step(0.001,uStroke);
   cov = max(cov, pool);
-  cov = max(cov, tip);
+  // the tip carries the same ink load and dry-brush breakup as the stroke behind it
+  float loadH = inkLoad(headU);
+  float dryH = smoothstep(loadH-0.25, loadH+0.05, bristle*(0.65+0.35*abs(v)));
+  cov = max(cov, tip*(1.0-dryH)*smoothstep(0.05, 0.4, loadH));
   float poolD = pool;
   // ink density varies: darker where the bristles pressed, lighter in the dry tail
   float dens = mix(0.8, 1.0, bristle)*mix(1.0, 0.75, smoothstep(0.55,1.0,u)*step(0.02,u));
@@ -100,10 +103,19 @@ void main(){
   vec3 gold = vec3(0.0);
   vec3 col = mix(paper, sumi, ink.x*0.96);
   if(uGoldInk>0.0){
-    // gold leaf over lacquer: metallic, catches the raking light
-    float spark = pow(sat(dot(reflect(-L, normalize(n+vec3(gnoise(p*80.0),gnoise(p*80.0+3.0),0.0)*0.3)), vec3(0,0,1))), 12.0);
-    gold = vec3(0.78,0.55,0.2)*(0.7+0.5*fbm(p*20.0,3)) + vec3(1.0,0.85,0.5)*spark*1.5;
-    col = mix(paper, gold, ink.x*uGoldInk);
+    // gold leaf laid with the brush: brushed metal, streaks running along the stroke,
+    // a slow light sweeping across it so the leaf breathes
+    float th = atan(p.y, p.x), r = length(p);
+    vec2 radial = p/max(r,1e-4);
+    float streak = vnoise(vec2(r*95.0, th*5.0))*0.6 + vnoise(vec2(r*280.0, th*13.0))*0.4;
+    vec3 gn = normalize(vec3(radial*(streak-0.5)*1.1 + vec2(gnoise(p*55.0), gnoise(p*55.0+5.0))*0.3, 1.0));
+    float ang = uTime*0.3;
+    vec3 Lg = normalize(vec3(cos(ang)*0.75, 0.35+sin(ang)*0.55, 0.55));
+    vec3 H = normalize(Lg + vec3(0,0,1));
+    float nh = sat(dot(gn,H));
+    vec3 gAlb = vec3(0.80,0.55,0.19)*(0.8+0.35*fbm(p*14.0,3));
+    gold = gAlb*(0.3 + 0.6*pow(nh,5.0)) + vec3(1.0,0.82,0.48)*pow(nh,40.0)*1.3;
+    col = mix(paper, gold, smoothstep(0.2, 0.75, ink.x)*uGoldInk);
   }
   // wet sheen: soft specular on fresh ink
   vec3 V = vec3(0,0,1);

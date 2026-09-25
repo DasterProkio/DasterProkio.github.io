@@ -9,6 +9,8 @@ uniform float uCool;       // how far behind the front the gold cools
 uniform vec3  uKeyDir;
 uniform float uRoomLight;  // 0 void rig, 1 morning room light (end of scene)
 uniform float uAlt;        // camera altitude (for detail LOD)
+uniform float uGlory;      // the climax: dawn floods the void from behind the bowl
+uniform vec3  uGloryDir;
 out vec4 fragColor;
 
 // seam field restricted to near the bowl
@@ -62,7 +64,11 @@ vec3 envSeam(vec3 d){
   dark += vec3(1.0,0.55,0.25)*0.35*exp(-abs(d.y-0.02)*7.0)*(0.55+0.45*d.z);
   vec3 kd = normalize(uKeyDir);
   float k = dot(d, kd);
-  dark += vec3(1.0,0.85,0.66)*(9.0*smoothstep(0.994,0.9985,k) + 0.5*pow(sat(k),24.0));
+  dark += vec3(1.0,0.85,0.66)*(1.2*pow(sat(k),400.0) + 0.5*pow(sat(k),24.0));
+  // the climax: a warm dawn behind the bowl, a luminous horizon, the void lifts
+  float gk = sat(dot(d, normalize(uGloryDir)));
+  vec3 glory = vec3(1.0,0.7,0.4)*(3.2*pow(gk,10.0) + 0.9*pow(gk,2.5)) + vec3(1.0,0.62,0.32)*0.6*exp(-abs(d.y-0.05)*5.0) + vec3(0.35,0.3,0.32)*0.12;
+  dark += glory*uGlory;
   dark += vec3(0.6,0.62,0.7)*0.06*sat(d.y);
   // morning room: warm window glow from +z, soft sky
   vec3 room = mix(vec3(0.06,0.05,0.045), vec3(0.5,0.48,0.45), smoothstep(-0.2,0.6,d.z)*smoothstep(-0.3,0.4,d.y));
@@ -96,6 +102,8 @@ void main(){
     vec3 v = -rd;
     vec3 L = normalize(uKeyDir);
     vec3 key = mix(vec3(1.0,0.85,0.66)*2.2, vec3(1.0,0.9,0.75)*3.0, uRoomLight);
+    vec3 GL = normalize(uGloryDir);
+    vec3 rimC = vec3(1.0,0.72,0.42)*5.0*uGlory*(1.0-uRoomLight*0.6);
     float bd = seamField(p).x;
     // light from the molten gold nearby (canyon glow)
     float front = length(p-uSource) - uFlow;
@@ -114,6 +122,7 @@ void main(){
       vec3 spec = specGGX(s.n, v, L, s.rough, s.f0)*key*sh;
       vec2 eb = envBRDF(nv, s.rough);
       spec += envSeam(reflect(-v,s.n))*(s.f0*eb.x+eb.y)*1.5;
+      spec += specGGX(s.n, v, GL, max(s.rough,0.25), s.f0)*rimC;
       col = spec + goldGlow*0.25*(0.5+0.5*gnoise(p*300.0-uTime))*molten + vec3(1.0,0.42,0.08)*molten*molten*0.7;
     } else {
       float b = sdBowl(p);
@@ -145,7 +154,9 @@ void main(){
       vec3 amb = envSeam(s.n)*0.9 + vec3(0.02,0.022,0.03)*(1.0-uRoomLight);
       col = s.alb*(1.0-Fc)*(key*nl*sh + amb + goldGlow*nearGold*0.35)
           + s.coat*(specGGX(s.cn, v, L, s.coatRough, vec3(0.04))*key*sh + envSeam(reflect(-v,s.cn))*F_Schlick1(0.04,nv))
-          + specGGX(s.n, v, L, s.rough, s.f0)*key*sh;
+          + specGGX(s.n, v, L, s.rough, s.f0)*key*sh
+          + s.coat*specGGX(s.cn, v, GL, 0.3, vec3(0.04))*rimC
+          + s.alb*rimC*0.12*pow(1.0-sat(dot(s.n,v)), 3.0)*sat(dot(s.n,GL)+0.3);
       // subsurface: glaze glows with gold light nearby
       col += vec3(0.8,0.6,0.25)*s.coat*nearGold*molten*0.25*step(front, 0.02);
     }
