@@ -136,3 +136,60 @@ Running production log. Newest entries at the bottom of each section.
   - Tools: `tools/audio.mjs` renders to WAV in headless Chromium;
     `tools/analyze.py` prints per-bar RMS/peak and draws a log-frequency
     spectrogram.
+- Ensō scene (`scenes/enso.glsl`).
+  - Washi fibres and pulp relief under raking light.
+  - The stroke is pressure-driven: touch-down pool, bristle streaks,
+    dry-brush tail, feathering, wet sheen. Gold variant for the end.
+- AgX "punchy" look added to the final grade (power 1.35, sat 1.4). The
+  base AgX toe lifted the blacks to about 0.4, so the ink read as grey.
+- **Full director** (`src/js/film.js`).
+  - 8 shots and 7 transitions: ink bleed, ember burn, mist, cut on
+    impact, crossfade at macro scale, mist, ink bleed.
+  - Cameras and grades blend across transitions; both scenes render with
+    the shared camera, so the world-space compositor lines up.
+  - Life is a time-lapse on a continuous day counter: seasons; tenmoku
+    arrives day 1 and is gone after day 10; per-day placement jitter;
+    gap closes until the bowls touch; tea each morning; candle nights;
+    stain accumulates.
+  - Lift, tremble and slip over the table edge; a slow-motion fall to
+    the floorboards.
+  - Break: shards rise from the impact into a constellation. The camera
+    visits 4 memory shards on the musical fragment cues, then dives into
+    the crack.
+
+## Review pass 1 (51 frames, every 5 s, 768×321)
+
+### Director
+1. Ensō: the brush-tip disc renders ahead of the dry tail as a detached
+   dot (t≈10).
+2. Fire, t 55–88: 30 s of near-uniform orange haze. Monotonous, no arc.
+   **Weakest section.** It needs a dark beginning with flames licking,
+   a build, and a white-hot peak.
+3. Cooled kiln, t 90–95: the other wares read as eggs; the ember floor
+   reads as polka dots; the bowl looks like a toy under flat cold light.
+4. Life: nights go pitch black; at 3.5 s/day that will strobe. Needs
+   moonlight and shorter nights.
+5. Life composition: bowls small, lots of dead dark table. Go lower and
+   closer.
+6. The fall, t≈155: the frame is empty (floor plus window band) while
+   the bowl is out of frame.
+7. Memories all look alike (bowl close-ups). Each needs a
+   season-dominant image: blossom, green, maple, snow, candle.
+8. Climax, t 205–220: the mended bowl sits in darkness at the musical
+   peak. It should be the most glorious light in the film.
+9. Mended: the steam is orange and huge. It reads as fire and covers the
+   top-down shot at t≈240.
+10. Title overlaps the ensō; it is too faint and small.
+
+### Cinematographer
+11. Studio: the wheel head is a flat pink disc; the wet clay has no gloss.
+12. Life: table too dark, shoji clipped; the sun blade rarely touches the
+    bowls.
+13. Shards: thick beige halos from the fracture face plus edge glow; the
+    portals are overexposed.
+14. Mended room: murky; gold not gleaming.
+
+### Engineer
+15. Celadon rim: speckled white sparkle at bowl scale (aliasing in the
+    thin-glaze rim).
+16. Steam colour follows dusk sun too strongly.

@@ -34,13 +34,13 @@
   }
 
   // ---------------------------------------------------------------- render one frame
-  let scaleMax = 1.0;
+  let lastOverlay = null;
   let dyn = 0.85;
   function renderAt(t, scale) {
     const f = Film.frameAt(t);
     const s = Math.min(scale, (f.post.scaleMax || 1.0));
     R.resize(canvas.width, canvas.height, s);
-    if (f.overlay) R.setOverlay(f.overlay);
+    if (f.overlay && f.overlay !== lastOverlay) { R.setOverlay(f.overlay); lastOverlay = f.overlay; }
     R.frame(f);
     return f;
   }

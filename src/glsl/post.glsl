@@ -49,6 +49,14 @@ void main(){
     float w = sin(uMix*3.14159);
     vec4 m = mix(a,b,smoothstep(0.3,0.7,uMix));
     o = vec4(m.rgb + w*w*2.5*vec3(1.0,0.85,0.6)*(0.4+0.6*fbm3(pw*0.5)), m.a);
+  } else if(uMode==5){
+    // mist: a soft noisy front grows from the centre, faintly luminous
+    float n = fbm3(pw*0.9+vec3(0.0,uTime*0.05,0.0));
+    float front = uMix*9.0 - r + (n-0.5)*3.0;
+    float k = smoothstep(-0.7, 0.7, front);
+    vec3 c = mix(a.rgb, b.rgb, k);
+    c += (a.rgb+b.rgb)*0.2*exp(-abs(front)*1.5)*sin(uMix*3.14159);
+    o = vec4(c, mix(a.a, b.a, k));
   } else {
     // dark void: world dissolves into darkness from the edges of the frame
     float n = fbm3(pw*0.8);
@@ -157,6 +165,7 @@ uniform vec2 uRes;           // output resolution
 uniform float uExposure, uBloomAmt, uGrain, uVignette, uCA, uTime, uLetterbox, uFade, uOverlayAmt, uShimmer;
 uniform vec3 uLift, uGamma, uGain; uniform float uSat; uniform vec3 uTintShadow, uTintHigh;
 uniform float uContrast;
+uniform float uPunch;
 
 float hash(vec2 p){ vec3 p3=fract(vec3(p.xyx)*0.1031); p3+=dot(p3,p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }
 
@@ -167,6 +176,10 @@ vec3 agx(vec3 c){
   c = clamp((log2(c)+12.47393)/16.5, 0.0, 1.0);
   vec3 x2=c*c, x4=x2*x2;
   c = 15.5*x4*x2 - 40.14*x4*c + 31.96*x4 - 6.868*x2*c + 0.4298*x2 + 0.1191*c - 0.00232;
+  // "punchy" look: more contrast in the toe, richer colour
+  vec3 lc = pow(max(c,0.0), vec3(mix(1.0, 1.35, uPunch)));
+  float l = dot(lc, vec3(0.2126,0.7152,0.0722));
+  c = l + (lc-l)*mix(1.0, 1.4, uPunch);
   c = Mi*c;
   return pow(max(c,0.0), vec3(2.2));
 }

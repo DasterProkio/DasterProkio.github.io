@@ -4,6 +4,7 @@ const R = p => fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const lib = ['src/glsl/common.glsl', 'src/glsl/bowl.glsl', 'src/glsl/bowlmat.glsl'];
 const SCENES = {
   life: [...lib, 'src/glsl/room.glsl', 'src/glsl/scenes/life.glsl'],
+  enso: ['src/glsl/common.glsl', 'src/glsl/scenes/enso.glsl'],
   studio: [...lib, 'src/glsl/scenes/studio.glsl'],
   kiln: [...lib, 'src/glsl/scenes/kiln.glsl'],
   seam: [...lib, 'src/glsl/scenes/seam.glsl'],

@@ -161,7 +161,7 @@ const Engine = (() => {
         uExposure: P.exposure, uBloomAmt: P.bloom, uGrain: P.grain, uVignette: P.vignette, uCA: P.ca,
         uTime: f.a.bag.uTime || 0, uLetterbox: 0, uFade: P.fade, uOverlayAmt: P.overlay, uShimmer: P.shimmer,
         uLift: P.lift, uGamma: P.gamma, uGain: P.gain, uSat: P.sat, uTintShadow: P.tintShadow, uTintHigh: P.tintHigh,
-        uContrast: P.contrast,
+        uContrast: P.contrast, uPunch: P.punch,
       });
       GLX.draw(gl, null);
     }
@@ -172,7 +172,7 @@ const Engine = (() => {
     fade: 1.0, overlay: 0.0, shimmer: 0.0,
     lift: [0, 0, 0], gamma: [1, 1, 1], gain: [1, 1, 1], sat: 1.0, contrast: 1.0,
     tintShadow: [1, 1, 1], tintHigh: [1, 1, 1],
-    focus: 3.0, aperture: 0.0, maxCoc: 10.0,
+    focus: 3.0, aperture: 0.0, maxCoc: 10.0, punch: 1.0,
   };
 
   return { Renderer, ASPECT, DEFAULT_POST };

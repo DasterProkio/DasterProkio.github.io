@@ -158,6 +158,8 @@ vec2 roomMap(vec3 p, Mem m){
   // wall and floor
   float w = WALLZ + 0.02 - p.z;
   if(w<r.x) r=vec2(w,4.0);
+  float back = min(p.z + 16.0, min(14.0 - p.x, p.x + 14.0));
+  if(back<r.x) r=vec2(back, 8.0);
   float f = p.y-FLOORY;
   if(f<r.x) r=vec2(f,5.0);
   return r;
@@ -402,9 +404,18 @@ vec4 roomTrace(vec3 ro, vec3 rd, Mem m, int steps){
         col = wallRadiance(p, rd, m);
       } else if(h.y==5.0){
         Surf s = defaultSurf(n);
-        // tatami
-        float weave = 0.85+0.15*sin(p.x*40.0);
-        s.alb = vec3(0.32,0.28,0.16)*weave; s.rough=0.8;
+        // dark polished floorboards
+        float plank = floor(p.x/1.4);
+        float gz = p.z + hash11(plank)*30.0;
+        float grain = fbm(vec2(p.x*3.0, gz*0.35)+plank*7.0, 4);
+        s.alb = vec3(0.10,0.06,0.035)*(0.75+0.5*sat(grain+0.5))*(0.85+0.3*hash11(plank+3.0));
+        float seam = smoothstep(0.02,0.0,abs(fract(p.x/1.4)-0.5)-0.49);
+        s.alb *= 1.0-0.6*seam;
+        s.rough=0.5; s.coat=0.6; s.coatRough=0.12;
+        col = roomLightSurf(s, p, v, m, ao);
+      } else if(h.y==8.0){
+        Surf s = defaultSurf(n);
+        s.alb = vec3(0.28,0.24,0.2)*(0.8+0.2*fbm(p.xy*0.5,3)); s.rough = 0.9;
         col = roomLightSurf(s, p, v, m, ao);
       } else if(h.y==7.0){
         Surf s = defaultSurf(n);
