@@ -30,10 +30,21 @@
     return fx;
   }
 
+  /** plate frames a render at time t will touch: [[plate, localTime], ...] (export pre-loading) */
+  PV.platesAt = function (t) {
+    const bar = t / BAR, i = sceneAt(bar), S = PV.SCENES[i], out = [];
+    if (S.plate) out.push([S.plate, t - S.a * BAR]);
+    const P = PV.SCENES[i - 1];
+    if (S.xin && P && P.plate && bar < S.a + S.xin) out.push([P.plate, t - P.a * BAR]);
+    return out;
+  };
+
   PV.renderAt = function (t) {
     t = clamp(t, 0, PV.LENGTH - 1e-3);
     const bar = t / BAR, i = sceneAt(bar), S = PV.SCENES[i];
     const fx = { ...PV.FX_DEFAULT, flash: [1, 1, 1, 0] };
+    PV.LB = Math.round((H * 60) / 720 * PV.lboxAt(bar)); // 2.13:1 letterbox; scenes keep HUD inside it
+    fx.lbox = PV.LB / H;
     g.save();
     const sfx = S.draw(g, state(S, t));
     g.restore();
@@ -54,7 +65,12 @@
       if (T.fx) merge(fx, T.fx(k));
     }
     if (post) post(src, fx, t);
-    else view2d.drawImage(src, 0, 0);
+    else {
+      view2d.drawImage(src, 0, 0);
+      view2d.fillStyle = '#000'; view2d.fillRect(0, 0, W, PV.LB); view2d.fillRect(0, H - PV.LB, W, PV.LB);
+    }
+    PV.platesEndFrame();
+    PV.platesPrefetch(bar);
     return S.name;
   };
 
@@ -85,7 +101,7 @@
     clockStart = performance.now();
     if (playing) audio.play(clockPos); else audio.pos = clockPos;
   }
-  PV.player = { setPlaying, seek, now };
+  PV.player = { setPlaying, seek, now, isPlaying: () => playing };
 
   function loop() {
     let t = now();
@@ -112,7 +128,10 @@
   });
 
   const fontsReady = document.fonts ? Promise.race([
-    Promise.all(['208px "Archivo Black"', '13px "Archivo"', '10px "JetBrains Mono"'].map(f => document.fonts.load(f))),
+    Promise.all([
+      ...['208px "Archivo Black"', '13px "Archivo"', '10px "JetBrains Mono"'].map(f => document.fonts.load(f)),
+      ...['500', '700', '900'].map(w => document.fonts.load(`${w} 20px "Noto Sans SC"`, PV.cjkText())),
+    ]),
     new Promise(r => setTimeout(r, 2500)),
   ]) : Promise.resolve();
   fontsReady.then(() => {

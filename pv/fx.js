@@ -1,10 +1,10 @@
 /* WebGL post-processing pass: the 2D scene canvas is uploaded as a texture every frame
    and run through one shader that does zoom punch, shake, swirl, pixelate, slit-scan,
-   directional smear, RGB split, invert, flash, grain and vignette. */
+   directional smear, RGB split, invert, flash, grain, vignette and the letterbox mask. */
 'use strict';
 PV.FX_DEFAULT = {
   zoom: 1, shakeX: 0, shakeY: 0, swirl: 0, pixel: 0, slit: 0, smear: 0, smearAngle: 0,
-  rgb: 0, invert: 0, flash: [1, 1, 1, 0], grain: 0.035, vig: 0.25, scan: 0,
+  rgb: 0, invert: 0, flash: [1, 1, 1, 0], grain: 0.035, vig: 0.25, scan: 0, lbox: 0,
 };
 
 PV.createFX = function (canvas) {
@@ -14,7 +14,7 @@ PV.createFX = function (canvas) {
   const fs = `
 precision highp float;
 uniform sampler2D T; uniform vec2 R; uniform float time;
-uniform float zoom, swirl, pixel, slit, smear, rgb, invert, grain, vig, scan;
+uniform float zoom, swirl, pixel, slit, smear, rgb, invert, grain, vig, scan, lbox;
 uniform vec2 shake, smearDir; uniform vec4 flash;
 varying vec2 v;
 float h(float n){ return fract(sin(n*91.3458)*47453.5453); }
@@ -55,6 +55,7 @@ void main(){
   c = mix(c, flash.rgb, flash.a);
   c += (h2(v*R + fract(time*7.)*100.)-.5)*grain;
   vec2 q = v-.5; c *= 1. - vig*dot(q,q)*1.8;
+  if (v.y < lbox || v.y > 1. - lbox) c = vec3(0.); // letterbox: untouched by every effect above
   gl_FragColor = vec4(c,1.);
 }`;
   const sh = (type, src) => {
@@ -81,7 +82,7 @@ void main(){
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   const U = {};
-  ['T', 'R', 'time', 'zoom', 'swirl', 'pixel', 'slit', 'smear', 'rgb', 'invert', 'grain', 'vig', 'scan', 'shake', 'smearDir', 'flash']
+  ['T', 'R', 'time', 'zoom', 'swirl', 'pixel', 'slit', 'smear', 'rgb', 'invert', 'grain', 'vig', 'scan', 'lbox', 'shake', 'smearDir', 'flash']
     .forEach(n => (U[n] = gl.getUniformLocation(pr, n)));
 
   return function render(src, fx, time) {
@@ -102,6 +103,7 @@ void main(){
     gl.uniform1f(U.grain, fx.grain);
     gl.uniform1f(U.vig, fx.vig);
     gl.uniform1f(U.scan, fx.scan);
+    gl.uniform1f(U.lbox, fx.lbox);
     gl.uniform4f(U.flash, ...fx.flash);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   };

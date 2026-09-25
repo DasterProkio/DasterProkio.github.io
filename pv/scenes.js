@@ -6,6 +6,7 @@
   const { W, H, C, RGB, BAR, BEAT, E, TAU, clamp, lerp, seg, hash, noise1, rng } = PV;
   const fill = (g, c) => { g.fillStyle = c; g.fillRect(0, 0, W, H); };
   const tri = k => 1 - Math.abs(k * 2 - 1);
+  const CFG = PV.CONFIG, A2 = CFG.accent2;
   const kick = t => PV.env('kick', t, 0.22);
   const snare = t => PV.env('snare', t, 0.18);
 
@@ -20,21 +21,31 @@
   }
   function hudCorners(g, color, a = 1) {
     g.globalAlpha = a;
-    const m = 24, l = 14;
-    [[m, m, 1, 1], [W - m, m, -1, 1], [m, H - m, 1, -1], [W - m, H - m, -1, -1]].forEach(([x, y, sx, sy]) => {
+    const m = 24, l = 14, my = m + PV.LB;
+    [[m, my, 1, 1], [W - m, my, -1, 1], [m, H - my, 1, -1], [W - m, H - my, -1, -1]].forEach(([x, y, sx, sy]) => {
       PV.line(g, x, y, x + l * sx, y, color, 1);
       PV.line(g, x, y, x, y + l * sy, color, 1);
     });
     g.globalAlpha = 1;
   }
   function hudBlock(g, t, color) {
-    PV.text(g, 'DASTER', 26, 30, 13, color, 'left', PV.F.sans, '600');
-    PV.text(g, 'PHASE SHIFT', 26, 46, 13, color, 'left', PV.F.sans, '600');
-    PV.text(g, '#01', 112, 62, 10, color);
-    g.fillStyle = color; PV.rrect(g, 108, 24, 36, 10, 5); g.fill();
-    PV.text(g, 'MOTION STUDY', 26, 62, 9, color);
-    PV.line(g, 26, H - 40, 26 + 140 + Math.sin(t * 3) * 20, H - 40, color, 1);
-    PV.text(g, `T+${t.toFixed(2)}`, 26, H - 28, 9, color);
+    const y = PV.LB;
+    PV.text(g, CFG.game.name, 26, y + 30, 13, color, 'left', PV.F.sans, '600');
+    PV.text(g, CFG.event.series, 26, y + 46, 13, color, 'left', PV.F.sans, '600');
+    g.fillStyle = color; PV.rrect(g, 128, y + 40, 30, 12, 6); g.fill();
+    PV.text(g, CFG.event.no, 143, y + 46.5, 8, '#fff', 'center', PV.F.sans, '700');
+    PV.text(g, `${CFG.event.titleEN} · ${CFG.event.title}`, 26, y + 62, 9, color);
+    PV.line(g, 26, H - y - 40, 26 + 140 + Math.sin(t * 3) * 20, H - y - 40, color, 1);
+    PV.text(g, `T+${t.toFixed(2)}`, 26, H - y - 28, 9, color);
+  }
+  /** event identity card: emblem + series + number + title (recurs at act ends) */
+  function titleCard(g, x, y, k, fg, bg) {
+    g.save(); g.globalAlpha = k;
+    PV.emblem(g, x, y - 34, 44 * E.outBack(clamp(k * 1.2)), fg, bg);
+    PV.text(g, `${CFG.event.series}  ${CFG.event.no}`, x, y + 34, 22, fg, 'center', PV.F.black);
+    PV.text(g, `${CFG.event.seriesCN} · ${CFG.event.title}`, x, y + 62, 13, fg, 'center', PV.F.cjk, '700');
+    PV.text(g, CFG.event.titleEN, x, y + 82, 9, fg, 'center');
+    g.restore();
   }
   const glassQuads = (seed, n) =>
     Array.from({ length: n }, (_, i) => {
@@ -79,17 +90,16 @@
   const S = [];
   const scene = (name, a, b, draw, extra = {}) => S.push({ name, a, b, draw, ...extra });
 
-  /* 0 ─ SIGNAL: black, oscilloscope line draws on, emblem flickers in */
+  /* 0 ─ OPENING: game logo slot flickers in on black, oscilloscope line underneath */
   scene('signal', 0, 1, (g, s) => {
     fill(g, '#060607');
     const k = E.outC(seg(s.u, 0.05, 0.85));
-    PV.sine(g, H / 2, 42, 3, s.t * 2, 'rgba(255,255,255,0.32)', 1, 0, W * k);
+    PV.sine(g, H / 2 + 60, 30, 3, s.t * 2, 'rgba(255,255,255,0.18)', 1, 0, W * k);
     const on = s.u < 0.55 ? (hash(Math.floor(s.t * 24)) > 0.45 ? 1 : 0.15) : 1;
-    g.globalAlpha = on * seg(s.u, 0.2, 0.6);
-    PV.mark(g, W / 2, H / 2 - 6, 15, '#e9e9e9');
+    g.globalAlpha = on * seg(s.u, 0.1, 0.4);
+    PV.gameLogo(g, W / 2, H / 2 - 8, 36, '#f4f4f4');
     g.globalAlpha = 1;
-    PV.text(g, 'DASTER.ME — MOTION STUDY 01', W / 2, H / 2 + 42, 9, `rgba(255,255,255,${0.45 * seg(s.u, 0.4, 0.8)})`, 'center');
-    return { grain: 0.07, vig: 0.7 };
+    return { grain: 0.05, vig: 0.4 };
   });
 
   /* 1 ─ LEAK: pastel light leak, sine continuity, pedestal rises */
@@ -114,24 +124,52 @@
   const Q2 = glassQuads(100, 15);
   scene('glass', 3, 5, (g, s) => {
     const { t, lt, u } = s;
-    const gr = g.createLinearGradient(0, 0, 0, H);
-    gr.addColorStop(0, '#50667a'); gr.addColorStop(0.55, '#b9c6d1'); gr.addColorStop(0.75, '#e9eef2'); gr.addColorStop(1, '#c3ced7');
-    g.fillStyle = gr; g.fillRect(0, 0, W, H);
-    PV.dot(g, W * 0.78, H * 0.12, 420, '#ffffff', 0, 0.55);
-    for (let i = 0; i < 16; i++) PV.dot(g, (hash(i) * W * 1.2 + lt * 25 * (0.5 + hash(i + 1))) % (W * 1.2) - 60, H * (0.62 + hash(i + 2) * 0.3), 120 + hash(i + 4) * 160, '#ffffff', 0, 0.35);
-    const cam = PV.cam(0, -40 + u * 30, -1100, 0.08, 0, 0, 1000);
-    const bx = [];
-    for (let i = 0; i < 9; i++) bx.push({ p: [0, 140 - i * 32, 0], s: [86, 24, 86], r: [0, lt * 0.35 * (i % 2 ? 1 : -1) + i * 0.4, 0], c: [58, 70, 84], edge: 'rgba(210,225,235,0.35)' });
-    PV.boxes(g, bx, cam, { ambient: 0.5 });
-    drawGlass(g, Q2, lt);
-    ['NODE.01', 'ECO/SIM', 'VEC 0.34', 'SEED 100', 'FIELD'].forEach((l, i) => PV.tag(g, 80 + i * 240 + Math.sin(t + i) * 6 - lt * 8, 60, l, 'rgba(255,255,255,.7)'));
-    PV.text(g, 'phase.01 — seeding', W / 2, H * 0.84, 10, 'rgba(60,70,80,.7)', 'center');
+    const baked = PV.plate(g, 'glass', lt);
+    if (!baked) {
+      const gr = g.createLinearGradient(0, 0, 0, H);
+      gr.addColorStop(0, '#50667a'); gr.addColorStop(0.55, '#b9c6d1'); gr.addColorStop(0.75, '#e9eef2'); gr.addColorStop(1, '#c3ced7');
+      g.fillStyle = gr; g.fillRect(0, 0, W, H);
+      const cam = PV.cam(0, -40 + u * 30, -1100, 0.08, 0, 0, 1000);
+      const bx = [];
+      for (let i = 0; i < 9; i++) bx.push({ p: [0, 140 - i * 32, 0], s: [86, 24, 86], r: [0, lt * 0.35 * (i % 2 ? 1 : -1) + i * 0.4, 0], c: [58, 70, 84], edge: 'rgba(210,225,235,0.35)' });
+      PV.boxes(g, bx, cam, { ambient: 0.5 });
+      drawGlass(g, Q2, lt);
+    }
+    PV.dot(g, W * 0.78, H * 0.12, 420, '#ffffff', 0, baked ? 0.25 : 0.55);
+    for (let i = 0; i < 10; i++) PV.dot(g, (hash(i) * W * 1.2 + lt * 25 * (0.5 + hash(i + 1))) % (W * 1.2) - 60, H * (0.7 + hash(i + 2) * 0.25), 120 + hash(i + 4) * 160, '#ffffff', 0, 0.22);
+    ['NODE.01', 'ECO/SIM', 'VEC 0.34', 'SEED 100', 'FIELD'].forEach((l, i) => PV.tag(g, 80 + i * 240 + Math.sin(t + i) * 6 - lt * 8, PV.LB + 24, l, 'rgba(255,255,255,.75)'));
+    g.globalAlpha = 0.85 * seg(lt, 0.3, 1.2);
+    PV.gameLogo(g, W / 2, H * 0.2, 13, '#ffffff');
+    g.globalAlpha = 1;
+    PV.text(g, `${CFG.event.series} ${CFG.event.no} — ${CFG.event.titleEN.toLowerCase()}`, W / 2, H - PV.LB - 22, 10, 'rgba(60,70,80,.75)', 'center');
     return { vig: 0.45, grain: 0.05, rgb: 0.8, zoom: 1.02 + u * 0.03 };
-  }, { xin: 0.3 });
+  }, { xin: 0.3, plate: 'glass' });
 
-  /* 3 ─ TOWER: rotating dark slab tower, god rays, light bar → slit-scan out */
+  /* 3 ─ TOWER: flat cyan line-art of the stack "becomes" the rendered tower; god rays, light bar → slit-scan out */
+  function flatTower(g, t, lb) {
+    paper(g, t);
+    const cx = W / 2, n = 11;
+    g.setLineDash([3, 6]); PV.ring(g, cx + 120, H * 0.5, 230, 'rgba(19,158,147,.6)', 1.2, -2 + lb * 0.3, 1.6 + lb * 0.3); g.setLineDash([]);
+    for (let i = 0; i < n; i++) {
+      const k = E.outE(seg(lb, i * 0.08, i * 0.08 + 0.5)), y = H * 0.9 - i * 56 * k, sk = Math.sin(i * 0.17 + lb * 0.3) * 40;
+      g.globalAlpha = k;
+      PV.poly(g, [[cx - 120 + sk, y], [cx + 120 + sk, y], [cx + 150 - sk * 0.3, y - 20], [cx - 90 - sk * 0.3, y - 20]], i % 3 === 1 ? C.cyanL : C.cyan, '#fff', 1.2);
+      g.fillStyle = C.cyanD; g.fillRect(cx - 120 + sk, y, 240, 22);
+    }
+    g.globalAlpha = 1;
+    PV.text(g, 'MODEL / tower.stack ×11', W * 0.14, H * 0.3, 10, C.cyanD);
+    PV.arrow(g, W * 0.14, H * 0.33, W * 0.3, H * 0.33, 1.5, 5, C.cyan);
+    hudCorners(g, 'rgba(0,0,0,.35)');
+  }
   scene('tower', 5, 8, (g, s) => {
-    const { t, lt, u, bar } = s;
+    const { t, lt, lb, u, bar } = s;
+    if (lb < 1.5) { flatTower(g, t, lb); return { grain: 0.03, vig: 0.12 }; }
+    const baked = PV.plate(g, 'tower', lt);
+    if (baked) {
+      towerOverlay(g, t, lt);
+      const sl = E.inQ(seg(bar, 7, 8));
+      return { vig: 0.45, grain: 0.05, rgb: 1 + sl * 9, slit: sl, zoom: 1 + u * 0.05 };
+    }
     const gr = g.createLinearGradient(0, 0, 0, H);
     gr.addColorStop(0, '#26323d'); gr.addColorStop(1, '#6e8090');
     g.fillStyle = gr; g.fillRect(0, 0, W, H);
@@ -158,7 +196,25 @@
     PV.line(g, cx - 150, ly, cx + 150, ly, 'rgba(255,255,255,.95)', 1.5);
     const sl = E.inQ(seg(bar, 7, 8));
     return { vig: 0.5, grain: 0.06, rgb: 1 + sl * 9, slit: sl, zoom: 1 + u * 0.05 };
-  }, { xin: 0.25 });
+  }, { plate: 'tower' });
+  /** additive light over the rendered tower: rotating rays, colour leaks */
+  function towerOverlay(g, t, lt) {
+    const cx = W / 2, cy = H * 0.36;
+    g.globalCompositeOperation = 'lighter';
+    g.save(); g.translate(cx, cy); g.rotate(t * 0.05);
+    for (let i = 0; i < 44; i++) {
+      const a = (i / 44) * TAU, w = 0.012 + hash(i) * 0.03;
+      g.fillStyle = `rgba(255,255,255,${0.012 + hash(i + 5) * 0.035})`;
+      g.beginPath(); g.moveTo(0, 0); g.lineTo(Math.cos(a - w) * 1400, Math.sin(a - w) * 1400); g.lineTo(Math.cos(a + w) * 1400, Math.sin(a + w) * 1400); g.fill();
+    }
+    g.restore();
+    PV.dot(g, W * 0.1, H * 0.35, 420, C.salmon, 0, 0.22 + 0.06 * Math.sin(lt * 2));
+    PV.dot(g, W * 0.92, H * 0.62, 460, C.cyan, 0, 0.16);
+    PV.dot(g, W * (0.3 + 0.1 * Math.sin(lt)), H * 0.2, 200, C.lilac, 0, 0.12);
+    g.globalCompositeOperation = 'source-over';
+    PV.tag(g, W * 0.64, PV.LB + 40, 'STACK 11 · ROT', 'rgba(255,255,255,.7)');
+    PV.text(g, `${CFG.game.name} / ${CFG.event.series} ${CFG.event.no}`, W - 30, H - PV.LB - 24, 9, 'rgba(255,255,255,.6)', 'right');
+  }
 
   /* 4 ─ BLUEPRINT: cyan slabs stack on 8ths over a schematic field */
   scene('blueprint', 8, 10, (g, s) => {
@@ -196,16 +252,21 @@
   { const r = rng(5); for (let i = 0; i < 15; i++) for (let j = 0; j < 15; j++) { const h = 20 + Math.pow(r(), 2) * 220; CF.push({ p: [(i - 7) * 95, -h / 2, j * 95], s: [70, h, 70], r: [0, 0, 0], c: r() < 0.08 ? [205, 210, 215] : [50, 57, 66], edge: 'rgba(150,185,205,0.16)' }); } }
   scene('cubefield', 10, 12, (g, s) => {
     const { t, lt, u } = s;
-    fill(g, '#0d1115');
-    const cam = PV.cam(Math.sin(lt * 0.4) * 60, -560, -560 + lt * 200, 0.62, -0.12 + lt * 0.04, 0, 900);
-    PV.boxes(g, CF, cam, { ambient: 0.4, fog: [500, 2100], fogColor: [13, 17, 21] });
+    const baked = PV.plate(g, 'cubefield', lt);
+    if (!baked) {
+      fill(g, '#0d1115');
+      const cam = PV.cam(Math.sin(lt * 0.4) * 60, -560, -560 + lt * 200, 0.62, -0.12 + lt * 0.04, 0, 900);
+      PV.boxes(g, CF, cam, { ambient: 0.4, fog: [500, 2100], fogColor: [13, 17, 21] });
+    }
     PV.poly(g, [[0, H * 0.66 - u * 40], [W, H * 0.46 - u * 40], [W, H], [0, H]], 'rgba(205,220,232,0.16)');
     PV.line(g, 0, H * 0.66 - u * 40, W, H * 0.46 - u * 40, 'rgba(255,255,255,.5)', 1.2);
-    for (let i = 0; i < 9; i++) PV.dot(g, (hash(i) * W + lt * 30 * (i % 3 + 1)) % W, H * hash(i + 7), 30 + hash(i + 2) * 80, i % 3 ? '#9fe9ff' : '#ffffff', 0.7, 0.12 + 0.16 * hash(i + 4));
+    for (let i = 0; i < (baked ? 4 : 9); i++) PV.dot(g, (hash(i) * W + lt * 30 * (i % 3 + 1)) % W, H * hash(i + 7), 30 + hash(i + 2) * 80, i % 3 ? '#9fe9ff' : '#ffffff', 0.7, 0.12 + 0.16 * hash(i + 4));
     const sa = 1 - seg(lt, 0, BAR * 0.6);
     if (sa > 0) PV.sine(g, H / 2, H * 0.42, 2, t * 0.9, `rgba(255,255,255,${0.5 * sa})`, 1);
+    PV.tag(g, 40, PV.LB + 24, 'GRID 21×28', 'rgba(255,255,255,.6)');
+    PV.text(g, 'eco.sim / habitat scan', W - 30, H - PV.LB - 22, 9, 'rgba(160,230,222,.8)', 'right');
     return { vig: 0.55, grain: 0.06, rgb: 1.5 };
-  });
+  }, { plate: 'cubefield' });
 
   /* 6 ─ HUD BUBBLES: rising bubble column, arrows, hatch bands, tumbling tiles */
   scene('hud', 12, 14, (g, s) => {
@@ -312,7 +373,7 @@
       PV.rrect(g, W / 2 - w / 2, H / 2 - h / 2, w, h, h / 2); g.stroke();
     }
     g.globalAlpha = 1;
-    const rows = ['PHASE', 'SHIFT', 'DASTER', 'PHASE'];
+    const rows = [CFG.event.series.split(' ')[0], CFG.event.titleEN.split(' ')[0], CFG.event.title, CFG.event.series.split(' ')[1] || CFG.game.name];
     const step = Math.floor(gb), f = E.outE(clamp((gb - step) * 2.2));
     rows.forEach((w, i) => {
       const dir = i % 2 ? 1 : -1, off = dir * ((step + f) * 90 % 1100);
@@ -321,7 +382,7 @@
       const tw = g.measureText(w + ' ').width;
       for (let x = -tw * 2 + off % tw; x < W + tw; x += tw) g.fillText(w, x, 96 + i * 176);
     });
-    PV.text(g, '16 — 170 BPM', W - 30, H - 26, 10, 'rgba(255,255,255,.9)', 'right');
+    PV.text(g, `${CFG.event.series} ${CFG.event.no} · ${CFG.event.kindEN}`, W - 30, H - PV.LB - 22, 10, 'rgba(255,255,255,.95)', 'right');
     return { zoom: 1 + 0.05 * kick(s.t), vig: 0.12, rgb: 3 * snare(s.t) };
   });
 
@@ -379,7 +440,7 @@
     const p = 0.42 + Math.sin(lt * 0.6) * 0.05, x = lerp(A[0], B[0], p), y = lerp(A[1], B[1], p);
     PV.ring(g, x, y, 26 + 4 * kick(t), '#fff', 2); PV.ring(g, x, y, 18, 'rgba(255,255,255,.6)', 1);
     PV.mark(g, x, y + 2, 8, '#fff', 0.14);
-    PV.text(g, 'migration / 20', 30, H - 30, 10, '#fff');
+    PV.text(g, 'migration / 20', 30, H - PV.LB - 22, 10, '#fff');
     return { zoom: 1 + 0.02 * kick(t), vig: 0.12 };
   });
 
@@ -416,10 +477,8 @@
       g.fillStyle = `rgba(236,237,235,${k})`; g.fillRect(0, 0, W, H);
       PV.sine(g, H / 2, 30, 14, t * 6, `rgba(47,214,198,${k})`, 1.2);
       g.globalAlpha = k;
-      PV.poly(g, PV.hex(g, W / 2, H / 2, 150), null, C.cyan, 1.5);
-      PV.mark(g, W / 2, H / 2 + 8, 24, C.cyan);
-      PV.text(g, 'PHASE 01 — COMPLETE', W / 2, H / 2 + 62, 9, C.cyanD, 'center');
       g.globalAlpha = 1;
+      titleCard(g, W / 2, H / 2 - 30, k, C.cyanD, C.paper);
     }
     const sm = lb < 7 ? 0.03 + 0.06 * snare(t) + 0.03 * (1 - lock) : 0;
     return { smear: sm, smearAngle: ang, vig: 0.12 };
@@ -442,11 +501,11 @@
     }
     for (let i = 0; i < 60; i++) if (hash(i + 99) > 0.3) { g.fillStyle = 'rgba(47,214,198,.7)'; g.fillRect(W * 0.08 + (i % 10) * 9, H * 0.7 + Math.floor(i / 10) * 9, 5, 5); }
     const step = Math.floor(gb * 2), rev = E.outE(seg(lb, 0.5, 1.5));
-    g.font = `150px ${PV.F.black}`; g.textBaseline = 'alphabetic'; g.textAlign = 'left';
+    g.font = `124px ${PV.F.black}`; g.textBaseline = 'alphabetic'; g.textAlign = 'left';
     for (let k = 0; k < 6; k++) {
       const y0 = H * 0.18 + k * 22, off = (hash(k * 13 + step) - 0.5) * 70 * (hash(step) > 0.55 ? 1 : 0.1);
       g.save(); g.beginPath(); g.rect(0, y0, W * 0.06 + 820 * rev, 22); g.clip();
-      g.fillStyle = C.cyan; g.fillText('DASTER', W * 0.06 + off, H * 0.18 + 128); g.restore();
+      g.fillStyle = C.cyan; g.fillText(CFG.event.titleEN.split(' ')[0], W * 0.06 + off, H * 0.18 + 128); g.restore();
     }
     PV.arrow(g, W * 0.1, H * 0.86, W * 0.3, H * 0.86, 2, 6, C.cyan);
     [[0.2, 0.52], [0.78, 0.6], [0.9, 0.84]].forEach(([x, y], i) => { PV.ring(g, W * x, H * y, 14 + i * 6, C.cyan, 2); PV.cross(g, W * x, H * y, 5, C.cyan); });
@@ -531,14 +590,15 @@
       if (it.hex && focus > 0.5) PV.poly(g, PV.hex(g, it.x, it.y, it.r), C.cyan);
       else PV.dot(g, it.x, it.y, it.r * (1 + (1 - focus) * 0.8), C.cyan, focus * 0.95, 0.35 + focus * 0.45);
     }
-    PV.text(g, '#01', 34, H - 34, 12, C.cyanD, 'left', PV.F.sans, '700');
+    PV.text(g, CFG.event.no, 34, H - PV.LB - 26, 12, C.cyanD, 'left', PV.F.sans, '700');
     let sm = 0;
     if (lb >= 6) {
       const k = E.outE(seg(lb, 6, 6.5)), sc = lerp(1.5, 1, k);
       g.save(); g.translate(W / 2, H / 2); g.transform(sc, 0, -0.32 * sc, sc, 0, 0);
       g.font = `230px ${PV.F.black}`; g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.lineWidth = 10; g.strokeStyle = C.cyan; g.strokeText('SHIFT', 0, 0);
-      g.fillStyle = '#fff'; g.fillText('SHIFT', 0, 0); g.restore();
+      const wd = CFG.event.series.split(' ').pop();
+      g.lineWidth = 10; g.strokeStyle = C.cyan; g.strokeText(wd, 0, 0);
+      g.fillStyle = '#fff'; g.fillText(wd, 0, 0); g.restore();
       sm = 0.06 * (1 - k);
     }
     return { smear: sm, smearAngle: 0, vig: 0.12, zoom: 1 + 0.02 * kick(t) };
@@ -547,6 +607,12 @@
   /* 18 ─ TUNNEL: fly-through of block rings */
   scene('tunnel', 32, 34, (g, s) => {
     const { t, lt } = s;
+    if (PV.plate(g, 'tunnel', lt)) {
+      for (let i = 0; i < 36; i++) { const a = hash(i) * TAU, r0 = 260 + ((hash(i + 1) * 300 + lt * 900) % 500); g.globalAlpha = 0.3; PV.line(g, W / 2 + Math.cos(a) * r0, H / 2 + Math.sin(a) * r0, W / 2 + Math.cos(a) * (r0 + 160), H / 2 + Math.sin(a) * (r0 + 160), '#fff', 2); }
+      g.globalAlpha = 1;
+      hudBlock(g, t, C.cyanD);
+      return { zoom: 1 + 0.03 * kick(t), rgb: 1.5 + 3 * snare(t), vig: 0.45 };
+    }
     fill(g, '#d8d9db');
     const cz = lt * 950, cam = PV.cam(0, 0, cz, 0, 0, lt * 0.35, 700), bx = [];
     const j0 = Math.floor(cz / 170);
@@ -562,7 +628,7 @@
     PV.poly(g, [[W * 0.46, H * 0.62], [W * 0.5, H * 0.52], [W * 0.52, H * 0.7]], '#43464b');
     hudBlock(g, t, C.cyanD);
     return { zoom: 1 + 0.03 * kick(t), rgb: 1.5 + 3 * snare(t), vig: 0.5 };
-  });
+  }, { plate: 'tunnel' });
 
   /* 19 ─ STRIPES: corrugated diagonal field with cyan pixel glitches */
   scene('stripes', 34, 36, (g, s) => {
@@ -604,15 +670,17 @@
   })();
   scene('wall', 36, 38, (g, s) => {
     const { t, lt, lb } = s;
-    fill(g, '#d1d3d5');
-    const cs = 62, zs = 1 + lt * 0.04;
-    g.save(); g.translate(W / 2, H / 2); g.scale(zs, zs); g.translate(-W / 2, -H / 2);
-    for (let j = -1; j < 13; j++) for (let i = -1; i < 22; i++) {
-      const d = (noise1(i * 0.35 + lt * 0.8 + j * 3.1) + 1) * 0.5, x = i * cs, y = j * cs, e = d * 12;
-      g.fillStyle = `rgb(${150 + d * 40 | 0},${152 + d * 40 | 0},${156 + d * 40 | 0})`; g.fillRect(x + e, y + e, cs, cs);
-      const v = 205 + d * 45 | 0; g.fillStyle = `rgb(${v},${v},${v + 2})`; g.fillRect(x, y, cs - 2, cs - 2);
+    if (!PV.plate(g, 'wall', lt)) {
+      fill(g, '#d1d3d5');
+      const cs = 62, zs = 1 + lt * 0.04;
+      g.save(); g.translate(W / 2, H / 2); g.scale(zs, zs); g.translate(-W / 2, -H / 2);
+      for (let j = -1; j < 13; j++) for (let i = -1; i < 22; i++) {
+        const d = (noise1(i * 0.35 + lt * 0.8 + j * 3.1) + 1) * 0.5, x = i * cs, y = j * cs, e = d * 12;
+        g.fillStyle = `rgb(${150 + d * 40 | 0},${152 + d * 40 | 0},${156 + d * 40 | 0})`; g.fillRect(x + e, y + e, cs, cs);
+        const v = 205 + d * 45 | 0; g.fillStyle = `rgb(${v},${v},${v + 2})`; g.fillRect(x, y, cs - 2, cs - 2);
+      }
+      g.restore();
     }
-    g.restore();
     HEXES.forEach(([hx, hy, r], i) => {
       const k = E.outBack(seg(lb, i * 0.5, i * 0.5 + 0.5));
       if (k <= 0) return;
@@ -624,48 +692,259 @@
       g.restore();
     });
     for (let i = 0; i < 20; i++) { g.fillStyle = C.cyan; g.fillRect(W * hash(i + Math.floor(lb * 2) * 20), H * (0.7 + hash(i + 3) * 0.3), 4 + hash(i) * 10, 4); }
+    PV.text(g, `${CFG.game.name} · ${CFG.event.series} ${CFG.event.no}`, W / 2, H - PV.LB - 26, 10, C.cyanD, 'center', PV.F.sans, '700');
     return { pixel: lerp(1, 36, E.inQ(seg(lb, 6.5, 8))), rgb: 1 + 3 * snare(t), shakeX: (hash(Math.floor(t * 20)) - 0.5) * 0.006 * kick(t), vig: 0.25 };
+  }, { plate: 'wall' });
+
+  /* ---------- operator / outfit helpers ---------- */
+  /** letters arrive left→right; unsettled letters flicker as solid blocks */
+  function glitchText(g, str, x, y, size, color, k, seed = 0, font = PV.F.black) {
+    g.font = `${size}px ${font}`; g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+    let cx = x;
+    const n = str.length, fr = Math.floor(k * 30);
+    for (let i = 0; i < n; i++) {
+      const ch = str[i], w = g.measureText(ch).width, lk = clamp((k - (i / n) * 0.6) / 0.4);
+      if (lk > 0) {
+        if (lk < 1 && hash(i * 7 + seed + fr) > 0.4) {
+          g.fillStyle = hash(i + seed + fr) > 0.5 ? A2 : color;
+          const bh = size * 0.72 * (0.25 + hash(i * 3 + fr) * 0.75);
+          g.fillRect(cx, y - bh, w * 0.9, bh);
+        } else { g.fillStyle = color; g.fillText(ch, cx, y); }
+      }
+      cx += w;
+    }
+    return cx;
+  }
+  const scratch = PV.mk(W, H), sg = scratch.getContext('2d');
+  /** draw art with horizontal slice displacement + colour bars (gi = glitch amount 0..1) */
+  function artGlitch(g, art, x, y, w, h, gi, t, contain = false, fy = 0.25) {
+    if (gi <= 0.01) { PV.drawFit(g, art, x, y, w, h, contain, 0.5, fy); return; }
+    sg.clearRect(0, 0, W, H);
+    PV.drawFit(sg, art, x, y, w, h, contain, 0.5, fy);
+    const n = 30, fr = Math.floor(t * 24);
+    for (let i = 0; i < n; i++) {
+      const sy = (i * H) / n, off = (hash(i * 3 + fr) - 0.5) * 260 * gi * (hash(i + fr * 7) > 0.55 ? 1 : 0.15);
+      g.drawImage(scratch, 0, sy, W, H / n + 1, off, sy, W, H / n + 1);
+    }
+    for (let i = 0; i < 14 * gi; i++) {
+      g.fillStyle = [A2, C.cyan, C.ink, '#ffffff'][i % 4];
+      g.fillRect(hash(i + fr) * W, hash(i * 5 + fr) * H, 20 + hash(i * 3 + fr) * 240, 4 + hash(i * 11 + fr) * 26);
+    }
+  }
+  function cropMarks(g, color, m = 22, l = 16) {
+    [[m, m, 1, 1], [W - m, m, -1, 1], [m, H - m, 1, -1], [W - m, H - m, -1, -1]].forEach(([x, y, sx, sy]) => {
+      PV.line(g, x, y, x + l * sx, y, color, 1.5); PV.line(g, x, y, x, y + l * sy, color, 1.5);
+    });
+  }
+  const star = (g, x, y, r, color) => PV.spike(g, x, y, r, 5, -Math.PI / 2, 0.45, color);
+
+  /* 21 ─ OPERATOR: new operator reveal — glitch-in art, name tag, rarity, kinetic name type */
+  scene('operator', 38, 39.5, (g, s) => {
+    const { t, lt, lb, u } = s;
+    const O = CFG.operator;
+    const bg = g.createLinearGradient(0, 0, W, H);
+    bg.addColorStop(0, '#ecebf2'); bg.addColorStop(1, '#c7cad6');
+    g.fillStyle = bg; g.fillRect(0, 0, W, H);
+    for (let i = 0; i < 26; i++) {
+      const x = ((hash(i) * W * 1.3 - lt * 26 * (1 + hash(i + 1))) % (W * 1.3) + W * 1.3) % (W * 1.3) - W * 0.15, y = hash(i + 2) * H, r = 26 + hash(i + 3) * 70;
+      if (i % 3) PV.poly(g, PV.hex(g, x, y, r, lt * 0.2 + i), 'rgba(255,255,255,.28)', 'rgba(255,255,255,.7)', 1.2);
+      else PV.poly(g, PV.hex(g, x, y, r * 0.5, i), null, 'rgba(255,255,255,.9)', 3);
+    }
+    const gi = 1 - E.outQ(seg(lb, 0, 1.4));
+    const z = 1.03 + u * 0.05;
+    artGlitch(g, PV.art('bust'), W * 0.5 - (W * 0.68 * z) / 2 + 60, -H * 0.03, W * 0.68 * z, H * 1.08 * z, gi, t);
+    g.globalCompositeOperation = 'lighter';
+    PV.dot(g, W * 0.9, H * 0.15, 260, A2, 0, 0.12);
+    g.globalCompositeOperation = 'source-over';
+    // name tag
+    const nk = E.outE(seg(lb, 0.8, 1.5)), tx = lerp(W + 30, W * 0.745, nk), ty = H * 0.46;
+    g.fillStyle = 'rgba(255,255,255,.9)'; g.fillRect(tx, ty - 26, 132, 20);
+    PV.text(g, 'NEW OPERATOR · 新干员', tx + 8, ty - 16, 9, C.ink, 'left', PV.F.mono, '600');
+    g.fillStyle = C.ink; g.fillRect(tx, ty, 300, 50);
+    PV.text(g, O.code, tx + 16, ty + 25, 24, '#fff', 'left', PV.F.cjk, '900');
+    PV.text(g, O.en, tx + 284, ty + 25, 11, '#aeb3bf', 'right', PV.F.mono, '600');
+    g.fillStyle = A2; g.fillRect(tx, ty + 50, 300 * E.outE(seg(lb, 1.3, 2)), 4);
+    for (let i = 0; i < O.rarity; i++) {
+      const k = E.outBack(seg(lb, 1.6 + i * 0.12, 2 + i * 0.12));
+      if (k > 0) star(g, tx + 14 + i * 22, ty + 74, 8 * k, A2);
+    }
+    g.globalAlpha = seg(lb, 2, 2.6);
+    PV.text(g, `${O.cls}  ${O.clsEN}`, tx, ty + 100, 12, C.ink, 'left', PV.F.cjk, '700');
+    PV.text(g, `${O.faction} · ${O.factionEN}`, tx, ty + 120, 10, '#4b4f59', 'left', PV.F.cjk);
+    O.tags.forEach((tg, i) => { g.strokeStyle = C.ink; g.lineWidth = 1; g.strokeRect(tx + i * 70, ty + 134, 62, 18); PV.text(g, tg, tx + i * 70 + 31, ty + 143, 10, C.ink, 'center', PV.F.cjk); });
+    g.globalAlpha = 1;
+    // coral bar + kinetic name
+    const bk = E.outE(seg(lb, 1.1, 1.9));
+    const cb = g.createLinearGradient(0, 0, W, 0); cb.addColorStop(0, A2); cb.addColorStop(1, '#ffc2b2');
+    g.fillStyle = cb; g.fillRect(0, H - 74, W * 0.9 * bk, 16);
+    PV.line(g, 0, H - 52, W * 0.9 * bk, H - 52, C.ink, 1);
+    glitchText(g, O.en.slice(0, 4), 34, H - 196, 104, C.ink, seg(lb, 2, 3.3), 3);
+    glitchText(g, O.en.slice(4), 34, H - 96, 104, C.ink, seg(lb, 2.4, 3.7), 9);
+    g.globalAlpha = seg(lb, 3.2, 4);
+    PV.text(g, `“${O.quote}”`, W - 36, H - 30, 13, C.ink, 'right', PV.F.cjk, '500');
+    PV.text(g, O.illustrator, 36, H - 30, 9, '#555a66', 'left');
+    g.globalAlpha = 1;
+    PV.text(g, `OPERATOR FILE ${CFG.event.no} / 干员档案`, 36, 38, 10, C.ink, 'left', PV.F.mono, '600');
+    PV.text(g, `${CFG.game.name} · ${CFG.event.series} · ${CFG.event.title}`, 36, 56, 9, '#555a66', 'left', PV.F.cjk);
+    cropMarks(g, 'rgba(26,27,30,.6)');
+    return { zoom: 1 + 0.03 * kick(t), rgb: 2 * snare(t) + gi * 8, vig: 0.12, grain: 0.03 };
   });
 
-  /* 21 ─ TRI-LENS: cyan triple-circle mask retracts to reveal a glass world */
+  /* 22 ─ OUTFIT: white fashion-page layout — ring reveal, then the full composition */
+  scene('outfit', 39.5, 42, (g, s) => {
+    const { t, lt, lb } = s;
+    const F = CFG.outfit;
+    fill(g, '#f3f3f1');
+    for (let i = 0; i < 7; i++) PV.dot(g, W * hash(i + 70) + Math.sin(lt * 0.5 + i) * 30, H * (0.3 + hash(i + 71) * 0.8), 200 + hash(i + 72) * 200, '#d6d9df', 0, 0.55);
+    g.font = `italic 700 300px Georgia, "Times New Roman", serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.strokeStyle = 'rgba(26,27,30,.14)'; g.lineWidth = 1.5;
+    g.strokeText(F.series.split(' ').pop(), W * 0.64 - lt * 16, H * 0.56);
+    const ring = E.outE(seg(lb, 0, 1.3)), settle = E.ioC(seg(lb, 2.4, 3.6));
+    const rc = [lerp(W * 0.5, W * 0.7, settle), H * 0.5], R = 270 * ring;
+    PV.ring(g, rc[0], rc[1], R, A2, 8);
+    PV.ring(g, rc[0], rc[1], R * 1.08, A2, 1.2, -1 + lt * 0.4, 1.4 + lt * 0.4);
+    // art: starts big inside the ring, settles to a full-body layout on the right
+    const bw = lerp(W * 0.5, W * 0.4, settle), bh = lerp(H * 1.6, H * 1.1, settle);
+    const bx = rc[0] - bw / 2, by = lerp(H * 0.5 - bh * 0.3, -H * 0.04, settle);
+    g.save();
+    if (settle < 1) { g.beginPath(); g.arc(rc[0], rc[1], lerp(R * 0.96, 1500, settle), 0, TAU); g.clip(); }
+    PV.drawFit(g, PV.art('full'), bx, by, bw, bh, true);
+    g.restore();
+    // layout
+    const L = seg(lb, 3, 3.6);
+    if (L > 0) {
+      g.globalAlpha = L;
+      PV.gameLogo(g, 40, 46, 20, C.ink, 'left');
+      PV.text(g, F.year, 40, 118, 11, C.ink, 'left', PV.F.mono, '600');
+      g.globalAlpha = 1;
+      const x1 = glitchText(g, F.nameEN[0], 36, 208, 92, C.ink, seg(lb, 3.2, 4.4), 21);
+      glitchText(g, F.nameEN[1], 36, 296, 92, C.ink, seg(lb, 3.5, 4.7), 27);
+      const bk = E.outE(seg(lb, 3.6, 4.4));
+      g.fillStyle = C.ink; g.fillRect(24, 322, (W * 0.56 - 24) * bk, 36);
+      g.fillStyle = A2; g.fillRect(W * 0.56, 322, (W * 0.44 - 24) * E.outE(seg(lb, 4, 4.8)), 36);
+      g.globalAlpha = bk;
+      PV.text(g, `${F.series} / ${F.seriesCN}`, 38, 340, 10, '#c9ccd4', 'left', PV.F.cjk);
+      PV.text(g, F.name, W * 0.56 - 16, 340, 18, '#fff', 'right', PV.F.cjk, '900');
+      PV.text(g, F.tag, W - 40, 340, 11, '#fff', 'right', PV.F.cjk, '700');
+      g.globalAlpha = seg(lb, 4.4, 5.2);
+      [[`穿戴干员`, `${F.wearer}  ${CFG.operator.en}`], [`类型`, F.tag], [`系列`, `${F.series} · ${F.seriesCN}`]].forEach(([k2, v], i) => {
+        PV.text(g, k2, 40, 392 + i * 22, 10, '#6a6e78', 'left', PV.F.cjk);
+        PV.text(g, v, 120, 392 + i * 22, 11, C.ink, 'left', PV.F.cjk, '700');
+      });
+      PV.text(g, F.note, 40, 470, 11, '#3d414a', 'left', PV.F.cjk);
+      PV.text(g, F.illustrator, 40, 492, 9, '#6a6e78', 'left');
+      PV.text(g, 'NEW OUTFIT', W - 40, 44, 15, C.ink, 'right', PV.F.black);
+      PV.text(g, 'COMING SOON', W - 40, 64, 15, A2, 'right', PV.F.black);
+      g.font = `italic 700 40px Georgia, "Times New Roman", serif`; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillStyle = C.ink;
+      g.fillText(F.series, 36, H - 58);
+      PV.text(g, F.seriesCN, 38, H - 28, 10, C.ink, 'left', PV.F.cjk, '700');
+      for (let i = 0; i < 9; i++) { g.fillStyle = C.ink; g.fillRect(W - 14, 120 + i * 58, 6, i % 3 ? 2 : 14); }
+      g.globalAlpha = 1;
+    }
+    cropMarks(g, 'rgba(26,27,30,.7)');
+    return { zoom: 1 + 0.02 * kick(t), vig: 0.06, grain: 0.025, rgb: 1.5 * snare(t) };
+  });
+
+  /* 23 ─ TRI-LENS: cyan triple-circle mask retracts to reveal the glass world; a figure behind frosted glass */
   const Q21 = glassQuads(900, 12);
-  scene('lens', 38, 40, (g, s) => {
+  scene('lens', 42, 45, (g, s) => {
     const { t, lt, lb } = s;
     fill(g, '#050506');
     const L = [[W / 2 - 270, H / 2], [W / 2, H / 2], [W / 2 + 270, H / 2]], R = 250;
     g.save(); g.beginPath(); L.forEach(([x, y]) => { g.moveTo(x + R, y); g.arc(x, y, R, 0, TAU); }); g.clip();
-    const gr = g.createLinearGradient(0, 0, W, H); gr.addColorStop(0, '#7f95a8'); gr.addColorStop(1, '#dfe7ec');
-    g.fillStyle = gr; g.fillRect(0, 0, W, H);
-    drawGlass(g, Q21, lt + 3);
-    for (let i = 0; i < 34; i++) {
-      const a = hash(i) * TAU + lt * (0.2 + hash(i + 1) * 0.3), r = 80 + hash(i + 2) * 380;
-      g.save(); g.translate(W / 2 + Math.cos(a) * r, H / 2 + Math.sin(a) * r * 0.5); g.rotate(a * 2 + lt);
-      g.fillStyle = 'rgba(255,255,255,.85)'; g.fillRect(-16, -3, 32, 6); g.restore();
+    if (!PV.plate(g, 'lens', lt)) {
+      const gr = g.createLinearGradient(0, 0, W, H); gr.addColorStop(0, '#7f95a8'); gr.addColorStop(1, '#dfe7ec');
+      g.fillStyle = gr; g.fillRect(0, 0, W, H);
+      drawGlass(g, Q21, lt + 3);
+      PV.ball(g, W / 2 + 60, H / 2 - 20, 40, '#bcd0dc'); PV.ball(g, W / 2 + 130, H / 2 + 30, 22, '#bcd0dc');
     }
-    PV.ball(g, W / 2 + 60, H / 2 - 20, 40, '#bcd0dc'); PV.ball(g, W / 2 + 130, H / 2 + 30, 22, '#bcd0dc');
+    const fk = seg(lb, 7, 8.5);
+    if (fk > 0) {
+      g.fillStyle = `rgba(22,30,40,${0.55 * seg(lb, 7, 10)})`; g.fillRect(0, 0, W, H);
+      g.save(); g.filter = 'blur(9px) grayscale(1) brightness(1.3)'; g.globalAlpha = 0.6 * fk;
+      PV.drawFit(g, PV.art('full'), W / 2 - 200, H * 0.08 + (1 - fk) * 40, 400, H * 1.1, true);
+      g.restore();
+      const by = H * (0.2 + 0.5 * seg(lb, 8, 11));
+      g.globalCompositeOperation = 'lighter';
+      g.drawImage(PV.soft('#ffffff'), W / 2 - 360, by - 8, 720, 16);
+      g.globalCompositeOperation = 'source-over';
+    }
     for (let x = 0; x < W; x += 4) { g.fillStyle = 'rgba(255,255,255,.05)'; g.fillRect(x, 0, 1, H); }
     PV.line(g, L[0][0] - R, H * 0.8, L[2][0] + R, H * 0.2, 'rgba(255,255,255,.6)', 1);
     const c = 1 - E.inC(seg(lb, 0.2, 1.4));
     if (c > 0) L.forEach(([x, y]) => PV.disc(g, x, y, R * c, C.cyan));
     g.restore();
-    const dim = seg(lb, 6.5, 8);
-    return { vig: 0.3, grain: 0.05, flash: [0, 0, 0, dim * 0.4] };
+    ['01', '02', '03'].forEach((n, i) => PV.text(g, `LENS.${n}`, L[i][0], H / 2 + R + 18, 9, 'rgba(255,255,255,.45)', 'center'));
+    return { vig: 0.3, grain: 0.05, flash: [0, 0, 0, seg(lb, 11, 12) * 0.5] };
+  }, { plate: 'lens' });
+
+  /* 24 ─ KEY VISUAL: diorama through the tri-circle, emblem, event title, dates, logo slots */
+  scene('kv', 45, 47, (g, s) => {
+    const { t, lt, lb } = s;
+    const EV = CFG.event;
+    fill(g, '#050506');
+    g.save(); g.beginPath();
+    [[W / 2 - 340, H * 0.44, 310], [W / 2, H * 0.4, 330], [W / 2 + 340, H * 0.44, 310]].forEach(([x, y, r]) => { g.moveTo(x + r, y); g.arc(x, y, r, 0, TAU); });
+    g.rect(0, H * 0.58, W, H); g.clip();
+    if (!PV.plate(g, 'kv', lt)) {
+      const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#1fcfbf'); gr.addColorStop(0.62, '#e8fbf8'); gr.addColorStop(0.63, '#eceeef'); gr.addColorStop(1, '#d7d9db');
+      g.fillStyle = gr; g.fillRect(0, 0, W, H);
+      const cam = PV.cam(0, -120, -900 + lt * 30, 0.1, 0, 0, 900);
+      PV.boxes(g, [{ p: [0, 40, 0], s: [340, 150, 210], r: [0, 0.3, 0], c: [236, 238, 240] }, { p: [0, 20, 0], s: [344, 26, 214], r: [0, 0.3, 0], c: RGB.cyan }, { p: [-300, 90, -60], s: [70, 70, 70], r: [0, 0.5, 0], c: [255, 122, 92] }], cam, { ambient: 0.55 });
+    }
+    g.restore();
+    g.globalAlpha = seg(lb, 0.3, 1);
+    PV.gameLogo(g, 36, 42, 16, '#ffffff', 'left');
+    PV.logoSlot(g, CFG.studio.logo, W - 196, 40, 110, 30, CFG.studio.name, null, 'rgba(255,255,255,.75)');
+    PV.logoSlot(g, CFG.slates[0].logo, W - 72, 40, 90, 30, 'PLATFORM', null, 'rgba(255,255,255,.75)');
+    g.globalAlpha = 1;
+    const ek = E.outBack(seg(lb, 0, 0.6));
+    if (ek > 0) PV.emblem(g, W / 2, H * 0.13, 50 * ek, C.ink, '#ffffff');
+    const wk = E.outE(seg(lb, 0.4, 1.4));
+    g.save(); g.beginPath(); g.rect(W / 2 - 400 * wk, 0, 800 * wk, H); g.clip();
+    g.font = `58px ${PV.F.black}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.lineJoin = 'round'; g.lineWidth = 8; g.strokeStyle = '#ffffff'; g.strokeText(EV.series, W / 2, H * 0.285);
+    g.fillStyle = C.ink; g.fillText(EV.series, W / 2, H * 0.285);
+    g.restore();
+    g.globalAlpha = seg(lb, 1, 1.6);
+    g.fillStyle = A2; PV.rrect(g, W / 2 + 232, H * 0.285 - 16, 54, 32, 16); g.fill();
+    PV.text(g, EV.no, W / 2 + 259, H * 0.285 + 1, 16, '#fff', 'center', PV.F.black);
+    g.fillStyle = C.ink; g.fillRect(W / 2 - 150, H * 0.345, 300, 34);
+    PV.text(g, `${EV.seriesCN} · ${EV.title}`, W / 2, H * 0.345 + 17, 18, '#ffffff', 'center', PV.F.cjk, '900');
+    PV.text(g, EV.titleEN, W / 2, H * 0.345 + 50, 10, C.ink, 'center', PV.F.mono, '600');
+    g.globalAlpha = seg(lb, 2, 2.6);
+    g.fillStyle = 'rgba(26,27,30,.88)'; g.fillRect(36, H - 88, 360, 52);
+    PV.text(g, EV.kind, 50, H - 72, 12, '#fff', 'left', PV.F.cjk, '700');
+    PV.text(g, EV.dates, 50, H - 50, 12, C.cyanL, 'left', PV.F.mono, '600');
+    PV.text(g, 'UTC+8', 382, H - 50, 9, '#9aa0aa', 'right');
+    g.globalAlpha = 1;
+    return { vig: 0.12, grain: 0.03, zoom: 1 + 0.015 * lt, flash: [0, 0, 0, E.inQ(seg(lb, 6.5, 8))] };
+  }, { plate: 'kv' });
+
+  /* 25 ─ SLATES: platform / developer / rating slots on black, in silence */
+  scene('slates', 47, 51, (g, s) => {
+    const { lb } = s;
+    fill(g, '#000');
+    const per = 16 / CFG.slates.length, i = Math.min(CFG.slates.length - 1, Math.floor(lb / per)), l = lb - i * per;
+    const a = seg(l, 0.2, 0.9) * (1 - seg(l, per - 1.2, per - 0.3)), sl = CFG.slates[i];
+    g.globalAlpha = a;
+    if (sl.useStudio && !sl.logo) {
+      PV.mark(g, W / 2 - 104, H / 2 - 4, 20, '#f2f2f2');
+      PV.text(g, CFG.studio.name, W / 2 - 72, H / 2 - 2, 30, '#f2f2f2', 'left', PV.F.black);
+      PV.text(g, 'procedural visuals + synthesized score', W / 2, H / 2 + 40, 9, 'rgba(255,255,255,.5)', 'center');
+    } else if (sl.rating && !sl.logo) {
+      g.fillStyle = '#2a8fd0'; PV.rrect(g, W / 2 - 38, H / 2 - 50, 76, 86, 8); g.fill();
+      g.strokeStyle = '#fff'; g.lineWidth = 2; PV.rrect(g, W / 2 - 32, H / 2 - 44, 64, 60, 5); g.stroke();
+      PV.text(g, sl.rating, W / 2, H / 2 - 14, 30, '#fff', 'center', PV.F.black);
+      PV.text(g, 'RATING', W / 2, H / 2 + 26, 9, '#fff', 'center', PV.F.sans, '700');
+      PV.text(g, `${sl.label} · ${sl.cn}`, W / 2, H / 2 + 62, 9, 'rgba(255,255,255,.5)', 'center', PV.F.cjk);
+    } else PV.logoSlot(g, sl.logo, W / 2, H / 2, 280, 80, `${sl.label} LOGO`, sl.cn);
+    g.globalAlpha = 1;
+    return { vig: 0, grain: 0.02 };
   });
 
-  /* 22 ─ END CARD */
-  scene('end', 40, 42, (g, s) => {
-    const { t, lb } = s;
-    paper(g, t, false);
-    PV.sine(g, H * 0.42, 60 * (1 - E.outC(seg(lb, 0, 6))), 7, t * 2, 'rgba(0,0,0,.25)', 1);
-    const k = E.outBack(seg(lb, 0, 0.8));
-    g.save(); g.translate(W / 2, H * 0.4); g.scale(k, k); PV.disc(g, 0, 0, 70, C.paper); PV.mark(g, 0, 8, 44, C.cyan); g.restore();
-    const word = 'DASTER.ME', n = Math.floor(seg(lb, 0.5, 2.5) * word.length * 1.0001);
-    g.font = `52px ${PV.F.black}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = C.ink;
-    g.fillText(word.slice(0, n) + (n < word.length && Math.floor(t * 12) % 2 ? '_' : ''), W / 2, H * 0.62);
-    PV.text(g, 'PHASE SHIFT · 相位跃迁 · MOTION STUDY 01', W / 2, H * 0.7, 11, `rgba(60,60,60,${seg(lb, 2, 3)})`, 'center');
-    PV.text(g, 'procedural visuals + synthesized score · zero bitmap assets', W / 2, H * 0.9, 9, `rgba(90,90,90,${seg(lb, 3, 4)})`, 'center');
-    return { vig: 0.2, flash: [0, 0, 0, E.inQ(seg(lb, 6, 8))] };
-  });
+  /** letterbox (2.13:1) everywhere except the opening logo, the operator/outfit pages and the key visual */
+  PV.lboxAt = bar => ((bar >= 1 && bar < 38) || (bar >= 42 && bar < 45) ? 1 : 0);
 
   /* ---------- transitions (bars) ---------- */
   const T = [];
@@ -712,7 +991,22 @@
   tr('swirl32', 31.75, 32.25, swirlFx, swirl);
   tr('swirl34', 33.75, 34.25, swirlFx, swirl);
   tr('cyan36', 35.85, 36.2, k => ({ flash: [0.18, 0.84, 0.78, k < 0.3 ? E.outQ(k / 0.3) : 1 - E.inQ((k - 0.3) / 0.7)] }));
-  tr('white40', 39.8, 40.2, k => ({ flash: [0.93, 0.93, 0.92, tri(k)] }));
+  tr('op-in', 38, 38.4, k => ({ pixel: lerp(30, 1, E.outQ(k)), rgb: 10 * (1 - k) }), (g, k) => {
+    const fr = Math.floor(k * 40);
+    for (let i = 0; i < 40 * (1 - k); i++) { g.fillStyle = [A2, C.cyan, C.ink, '#fff'][i % 4]; g.fillRect(hash(i + fr) * W, hash(i * 3 + fr) * H, 30 + hash(i * 7 + fr) * 300, 6 + hash(i * 5 + fr) * 40); }
+  });
+  tr('mosaic', 39.3, 39.7, k => ({ rgb: 6 * tri(k) }), (g, k) => {
+    const cw = W / 16, ch = H / 9, cov = k < 0.5 ? E.inQ(k * 2) : 1 - E.outQ((k - 0.5) * 2);
+    for (let j = 0; j < 9; j++) for (let i = 0; i < 16; i++) {
+      const h = hash(i * 31 + j * 17);
+      if (h > cov * 1.05) continue;
+      g.fillStyle = h < 0.08 ? A2 : h < 0.3 ? '#dfe0e3' : '#f3f3f1';
+      g.fillRect(i * cw, j * ch, cw + 1, ch + 1);
+    }
+  });
+  tr('cut42', 41.75, 42, k => ({ flash: [1, 1, 1, E.inQ(k)], zoom: 1 + 0.06 * E.inQ(k) }));
+  tr('lens-in', 42, 42.15, k => ({ flash: [1, 1, 1, 1 - E.outQ(k)] }));
+  tr('kv-in', 45, 45.2, k => ({ flash: [1, 1, 1, 1 - E.outQ(k)], zoom: 1 + 0.05 * (1 - E.outE(k)) }));
 
   PV.SCENES = S;
   PV.TRANS = T;

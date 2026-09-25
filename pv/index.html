@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Phase Shift — Motion Study</title>
-<meta name="description" content="A 59-second procedural motion-graphics piece with a synthesized 170 BPM score. Canvas 2D + WebGL post + WebAudio, no bitmap assets.">
+<meta name="description" content="A 72-second motion-graphics study with a synthesized 170 BPM score: Canvas 2D + WebGL post + WebAudio, with Cycles-rendered 3D plates and swappable art / logo slots.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700&family=Archivo+Black&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700&family=Archivo+Black&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+SC:wght@500;700;900&display=swap" rel="stylesheet">
 <style>
   :root { --bg: #0b0b0c; --fg: #e9eaea; --dim: #7c7f84; --accent: #2fd6c6; }
   * { box-sizing: border-box; }
@@ -46,10 +46,12 @@
   <div class="box">
     <h1>PHASE SHIFT — MOTION STUDY 01</h1>
     <span class="cta">▶ PLAY WITH SOUND</span>
-    <p>space 播放/暂停 · ←/→ 按小节跳转 · d 显示镜头名<br>全部画面与配乐由代码实时生成 · <a href="https://github.com/DasterProkio/DasterProkio.github.io/blob/main/pv/TEMPLATE.md" target="_blank" rel="noopener" onclick="event.stopPropagation()">可迁移模板</a></p>
+    <p>space 播放/暂停 · ←/→ 按小节跳转 · d 显示镜头名<br>2D 与配乐实时生成 · 3D 镜头为 Blender Cycles 预渲染 · 立绘/Logo 为可替换占位 · <a href="https://github.com/DasterProkio/DasterProkio.github.io/blob/main/pv/TEMPLATE.md" target="_blank" rel="noopener" onclick="event.stopPropagation()">可迁移模板</a></p>
   </div>
 </div>
 <script src="engine.js"></script>
+<script src="config.js"></script>
+<script src="assets.js"></script>
 <script src="fx.js"></script>
 <script src="audio.js"></script>
 <script src="scenes.js"></script>

@@ -1,11 +1,12 @@
-/* Original procedural score, 170 BPM, 42 bars.
-   Arrangement: intro 0-8 | build 8-16 (drop-stop at 15.875) | drop 16-36 | filter-down 36-40 | tail 40-42.
+/* Original procedural score, 170 BPM, 51 bars.
+   Arrangement: intro 0-8 | build 8-16 (drop-stop at 15.875) | drop 16-36 | filter-down 36-38 |
+   operator/outfit groove 38-42 (stop at 41.875) | lens ambience 42-45 | key-visual hit 45-47 | slates 47-51 (near silence).
    The same event list feeds PV.hits, so visual punches land exactly on kicks/snares. */
 'use strict';
 (function () {
   const { BAR, BEAT } = PV;
   const S8 = BEAT / 2, S16 = BEAT / 4;
-  PV.LENGTH = 42 * BAR;
+  PV.LENGTH = 51 * BAR;
 
   const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
   // D minor-ish loop, one chord per 2 bars
@@ -26,7 +27,7 @@
   // intro
   at(0, 'swell', { dur: BAR * 1, v: 0.18 });
   at(1, 'impact', { v: 0.9 });
-  for (let b = 1; b < 40; b += 2) {
+  for (let b = 1; b < 38; b += 2) {
     const cut = b < 8 ? 2600 : b < 16 ? 3400 : b < 36 ? 5200 : 1400;
     at(b, 'pad', { dur: BAR * 2, notes: CH[chordIx(b - 1)], cut, v: b < 8 ? 0.016 : b < 16 ? 0.02 : 0.022 });
   }
@@ -45,7 +46,7 @@
   for (let b = 5; b < 8; b++) for (let i = 0; i < 8; i++) at(b + i / 8, 'hat', { v: 0.05 + (i % 2) * 0.03 });
   at(7, 'swell', { dur: BAR, v: 0.25 });
   at(1, 'air', { dur: BAR * 7, v: 0.03 });
-  at(38, 'air', { dur: BAR * 4, v: 0.025 });
+  at(36, 'air', { dur: BAR * 2, v: 0.025 });
 
   // build 8-16: half-time drums, gliding sub, riser, snare roll, stop
   at(8, 'impact', { v: 0.8 });
@@ -84,18 +85,63 @@
   for (let i = 0; i < 8; i++) at(35.5 + i / 32, 'snare', { v: 0.4 + i * 0.05 });
   at(35.75, 'whoosh', { dur: BAR * 0.25 });
 
-  // 36-40: filter-down, half-time
+  // 36-38: filter-down, half-time (cube wall)
   at(36, 'crash', { v: 0.3 });
   for (let b = 36; b < 38; b++) {
     at(b, 'kick', { v: 0.9 });
     at(b + 0.5, 'snare', { v: 0.5 });
     for (let i = 0; i < 8; i++) at(b + i / 8, 'hat', { v: 0.04 });
   }
-  for (let b = 36; b < 40; b += 2) at(b, 'sub', { dur: BAR * 2, m: ROOT[chordIx(b)] });
-  for (let b = 38; b < 40; b++) for (let i = 0; i < 8; i++) at(b + i / 8, 'pluck', { m: CH[chordIx(b)][ARP[i]] + 24, v: 0.05, cut: 2500 });
-  at(40, 'impact', { v: 0.7 });
-  at(40, 'pad', { dur: BAR * 2, notes: [50, 57, 62, 65, 69], cut: 1400, v: 0.02 });
-  at(40, 'sub', { dur: BAR * 1.8, m: 38 });
+  at(36, 'sub', { dur: BAR * 2, m: ROOT[chordIx(36)] });
+  for (let i = 0; i < 8; i++) at(37 + i / 8, 'pluck', { m: CH[chordIx(37)][ARP[i]] + 24, v: 0.05, cut: 2500 });
+  at(37, 'riser', { dur: BAR });
+  for (let i = 0; i < 8; i++) at(37.5 + i / 16, 'snare', { v: 0.25 + i * 0.05 });
+
+  // 38-42: operator / outfit groove — two-step again, brighter plucks instead of reese
+  at(38, 'crash', { v: 0.35 }); at(38, 'impact', { v: 0.85 });
+  for (let b = 38; b < 42; b++) {
+    const last = b === 41;
+    for (const k of KICK) at(b + k / 8, 'kick', { v: 0.95 });
+    if (b % 2) at(b + 11 / 16, 'kick', { v: 0.6 });
+    for (const s of SNARE) if (!(last && s === 6)) at(b + s / 8, 'snare', { v: 0.75 });
+    at(b + 7 / 16, 'snare', { v: 0.16 });
+    for (let i = 0; i < (last ? 12 : 16); i++) at(b + i / 16, 'hat', { v: i % 2 ? 0.03 : 0.06, open: i % 8 === 4 });
+    at(b + 3 / 16, 'stab', { notes: CH[chordIx(b)], v: 0.045 });
+    for (let i = 0; i < (last ? 12 : 16); i++) at(b + i / 16, 'pluck', { m: CH[chordIx(b)][ARP[i % 8]] + 12 + (i % 4 === 3 ? 12 : 0), v: 0.05, cut: 2800 });
+  }
+  at(38, 'pad', { dur: BAR * 2, notes: CH[chordIx(38)], cut: 4200, v: 0.02 });
+  at(40, 'pad', { dur: BAR * 1.875, notes: CH[chordIx(40)], cut: 4200, v: 0.02 });
+  at(38, 'sub', { dur: BAR * 2, m: ROOT[chordIx(38)] });
+  at(40, 'sub', { dur: BAR * 1.875, m: ROOT[chordIx(40)] });
+  at(39.3, 'whoosh', { dur: BAR * 0.4 });
+  at(39.5, 'crash', { v: 0.25 });
+  at(41, 'riser', { dur: BAR * 0.875 });
+  for (let i = 0; i < 8; i++) at(41.5 + i / 32, 'snare', { v: 0.35 + i * 0.05 });
+
+  // 42-45: lens ambience — impact, wide pads, sparse delayed plucks, air
+  at(42, 'impact', { v: 0.8 }); at(42, 'crash', { v: 0.22 });
+  at(42, 'swell', { dur: BAR * 0.35, v: 0.2 });
+  at(42, 'pad', { dur: BAR * 2, notes: [50, 57, 62, 65, 69, 76], cut: 2600, v: 0.026 });
+  at(44, 'pad', { dur: BAR, notes: [46, 53, 58, 62, 69], cut: 2200, v: 0.026 });
+  at(42, 'sub', { dur: BAR * 3, m: 38 });
+  at(42, 'air', { dur: BAR * 3, v: 0.03 });
+  for (let b = 42; b < 45; b++) for (let i = 0; i < 8; i += 2) at(b + i / 8 + (b === 44 ? 1 / 16 : 0), 'pluck', { m: CH[chordIx(b)][ARP[(i + b) % 8]] + 24, v: 0.045, cut: 2000 });
+  [42.25, 42.5, 42.75].forEach((b, i) => at(b, 'blip', { f: 1320 + i * 440, v: 0.03 }));
+  at(44, 'swell', { dur: BAR, v: 0.22 });
+
+  // 45-47: key visual hit, then let it ring
+  at(45, 'impact', { v: 1 }); at(45, 'crash', { v: 0.35 });
+  at(45, 'pad', { dur: BAR * 2, notes: [50, 57, 62, 64, 69, 74], cut: 3600, v: 0.024 });
+  at(45, 'sub', { dur: BAR * 1.8, m: 38 });
+  for (let i = 0; i < 8; i++) at(45 + i / 8, 'pluck', { m: [74, 76, 81, 86, 81, 76, 74, 69][i], v: 0.05 - i * 0.004, cut: 3000 });
+  at(45, 'kick', { v: 0.8 });
+
+  // 47-51: slates — one soft chime per slate, otherwise silence
+  for (let k = 0; k < 3; k++) {
+    const b = 47 + (k * 4) / 3 + 0.08;
+    at(b, 'pluck', { m: 81, v: 0.03, cut: 2400 });
+    at(b + 1 / 16, 'pluck', { m: 88, v: 0.02, cut: 2400 });
+  }
 
   ev.sort((a, b) => a.t - b.t);
   PV.score = ev;
@@ -108,7 +154,10 @@
     if (b < 15.875) return lerp(2200, 18000, PV.E.inQ(PV.seg(b, 8, 15.8)));
     if (b < 36) return 18000;
     if (b < 38) return lerp(18000, 1400, PV.E.outQ(PV.seg(b, 36, 38)));
-    return lerp(1400, 700, PV.seg(b, 38, 42));
+    if (b < 42) return 14000;
+    if (b < 45) return lerp(4200, 2600, PV.seg(b, 42, 45));
+    if (b < 47) return lerp(12000, 2400, PV.E.inQ(PV.seg(b, 45, 47)));
+    return 2400;
   };
   const lerp = PV.lerp;
 
