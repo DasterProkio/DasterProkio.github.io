@@ -335,16 +335,18 @@ vec4 steamVolume(vec3 ro, vec3 rd, float tmax, vec3 base, float amt, Mem m){
   vec4 acc=vec4(0);
   float dt=(t1-t0)/14.0;
   float t=t0+dt*ign(gl_FragCoord.xy);
-  vec3 sc = sunColor(m)*0.5+roomAmbient(base, vec3(0,1,0), m)*3.0;
+  vec3 sc = sunColor(m)*0.18+roomAmbient(base, vec3(0,1,0), m)*2.2 + vec3(0.02);
   for(int i=0;i<14;i++){
     vec3 p=ro+rd*t-base;
     float y=p.y;
     if(y>0.0 && y<4.0){
       vec3 q=p; q.xz += vec2(sin(y*1.3+uTime*0.7), cos(y*1.1+uTime*0.5))*0.12*y;
       float r=length(q.xz);
-      float n=fbm(vec3(q.x*3.0, y*1.6-uTime*1.2, q.z*3.0),3);
-      float d=sat(n*1.4+0.4-r*2.2)*smoothstep(0.0,0.4,y)*smoothstep(4.0,1.0,y)*amt;
-      float al=1.0-exp(-d*dt*5.0);
+      float n=fbm(vec3(q.x*3.5, y*1.4-uTime*1.1, q.z*3.5),3);
+      // thin rising filaments rather than a cloud
+      float fil = 1.0-abs(2.0*vnoise(vec3(q.x*6.0, y*2.2-uTime*1.5, q.z*6.0))-1.0);
+      float d=sat(n*1.5+0.05-r*2.6)*fil*fil*smoothstep(0.0,0.35,y)*smoothstep(3.2,0.8,y)*amt;
+      float al=1.0-exp(-d*dt*3.0);
       acc.rgb += (1.0-acc.a)*al*sc*0.6;
       acc.a += (1.0-acc.a)*al;
     }

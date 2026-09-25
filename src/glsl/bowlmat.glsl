@@ -50,10 +50,12 @@ Surf bowlSurface(vec3 p, vec3 n, vec3 v){
   float slurry = sat(0.5+0.9*gnoise(vec3(a*6.0, pr.y*38.0, 0.0)));
 
   float firedAmt = max(uMelt, uHeat);
+  // iron shows through where the glaze thins over the rim: a warm brown lip, not raw grain
+  fired = mix(fired, vec3(0.30,0.19,0.12)*(0.95+0.05*grain), smoothstep(0.9, 0.995, h.s)*0.85);
   vec3 body = mix(raw, h.side<-1.5 ? footCol : fired, sat(firedAmt*1.5));
   s.alb = body;
   s.rough = 0.85;
-  BUMP(s.n, pr, clayGrain, 0.002, 0.00025);
+  BUMP(s.n, pr, clayGrain, 0.002, 0.00025*(1.0-0.8*uMelt));
 
   // ---------- wet film
   if(uWet>0.0){
@@ -112,7 +114,7 @@ Surf bowlSurface(vec3 p, vec3 n, vec3 v){
     s.coat = max(s.coat, coat);
     s.coatRough = mix(s.coatRough, 0.045, coat);
     vec3 cn = n;
-    BUMP(cn, p, glazeRipple, 0.004, 0.0012*uMelt);
+    BUMP(cn, p, glazeRipple, 0.004, 0.0004*uMelt);
     s.cn = normalize(mix(s.cn, cn, coat));
     s.sss = 0.35*coat*scat;
   }
