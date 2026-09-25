@@ -4,6 +4,11 @@
   "frames": 133,
   "rendered_every": 2
  },
+ "tower": {
+  "fps": 30,
+  "frames": 139,
+  "rendered_every": 2
+ },
  "tunnel": {
   "fps": 30,
   "frames": 94,
