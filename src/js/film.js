@@ -42,8 +42,29 @@ const Film = (() => {
     };
   })();
 
+  // ------------------------------------------------------------------ BREAK (spike)
+  const BRK0 = bar(47);
+  const brk = (t) => {
+    const lt = t - BRK0;
+    const eye = [3.2, 1.9, -4.6], tg = [0, 0.7, 0];
+    const pose = Shatter.pose({ origin: [0, 0, 0], explode: 0.05, spread: 1, face: 0.7, eye, drift: lt });
+    const m = {
+      uMemDay: 0.9, uMemSeason: 3, uMemTwo: 0, uMemGap: 1.45, uMemCandle: 0, uMemSteam: 0, uMemTea: 0, uMemTea2: 0,
+      uMemOpen: 0.1, uMemRing: 1,
+    };
+    return {
+      scene: 'break',
+      bag: Object.assign({}, BOWL_BASE, m, pose, Shatter.MEM, cam(eye, tg, 0.34), {
+        uTime: t, uLocal: lt, uStain: 0.4, uShardScale: 1, uShardN: Shatter.packN(), uVoid: 1, uPortal: 1,
+        uGoldEdge: 0, uGoldGlow: 0, uImpact: [0, 0, 0], uKeyDir: GLX.v.norm([-0.6, 0.8, -0.3]), uSpecks: 1,
+      }),
+      post: { exposure: 1.0, focus: V.len(V.sub(tg, eye)), aperture: 0.5, maxCoc: 8, bloom: 0.1, grain: 0.03 },
+    };
+  };
+
   const SHOTS = [
-    { name: 'life', t0: 0, t1: 1e9, fn: life },
+    { name: 'life', t0: 0, t1: BRK0, fn: life },
+    { name: 'break', t0: BRK0, t1: 1e9, fn: brk },
   ];
   const DURATION = bar(76);
 

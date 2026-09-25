@@ -6,6 +6,7 @@ const [url, out, ...args] = process.argv.slice(2);
 const W = +(process.env.W || 960), H = +(process.env.H || 540);
 const b = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const p = await b.newPage({ viewport: { width: W, height: H } });
+p.setDefaultTimeout(900000);
 p.on('console', m => { if (m.type() === 'error' || process.env.V) console.log('[page]', m.text()); });
 p.on('pageerror', e => console.log('[pageerror]', e.message));
 await p.goto(url + (url.includes('?') ? '&' : '?') + 'capture', { waitUntil: 'load' });
@@ -17,7 +18,8 @@ for (const a of args) {
   const v = isNaN(+a) ? a : +a;
   const label = await p.evaluate(v => window.__renderAt(v), v);
   const file = `${out}_${String(a).replace(/[^\w.-]/g, '_')}.png`;
-  await p.locator('canvas').first().screenshot({ path: file });
+  const data = await p.evaluate(() => document.querySelector('canvas').toDataURL('image/png'));
+  (await import('fs')).writeFileSync(file, Buffer.from(data.split(',')[1], 'base64'));
   console.log(file, label ?? '', ((Date.now() - t0) / 1000).toFixed(1) + 's');
 }
 await b.close();

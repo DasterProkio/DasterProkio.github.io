@@ -101,10 +101,17 @@ BowlHit bowlInfo(vec3 p){
   return h;
 }
 
+// Fracture warp: cheap analytic wobble so the same cells can be marched per shard.
+// (Mirrored exactly in bowl.js for CPU-side centroids.)
+vec3 fracWarp(vec3 p){
+  return p + 0.030*sin(p.zxy*9.1+vec3(1.3,4.1,2.7))
+           + 0.012*sin(p.yzx*23.7+vec3(0.4,2.2,5.1))
+           + 0.005*sin(p.zxy*61.0+vec3(2.9,0.7,4.4));
+}
+
 // Warped Voronoi on the fixed fracture seeds. Returns (border distance, cell index, second index)
 vec3 seamField(vec3 p){
-  vec3 w = p + 0.035*vec3(gnoise(p*9.0), gnoise(p*9.0+11.0), gnoise(p*9.0+23.0))
-             + 0.012*vec3(gnoise(p*31.0), gnoise(p*31.0+5.0), gnoise(p*31.0+9.0));
+  vec3 w = fracWarp(p);
   float d1=1e5, d2=1e5; int i1=0, i2=0;
   for(int i=0;i<NSEED;i++){
     vec3 r = w-uSeeds[i].xyz;
@@ -114,6 +121,21 @@ vec3 seamField(vec3 p){
   vec3 s1=uSeeds[i1].xyz, s2=uSeeds[i2].xyz;
   float bd = (d2-d1)/(2.0*length(s2-s1));
   return vec3(bd, float(i1), float(i2));
+}
+
+// signed distance (in warped space) to the boundary of cell i: <0 inside
+float cellDist(vec3 p, int i){
+  vec3 w = fracWarp(p);
+  vec3 si = uSeeds[i].xyz;
+  float di = dot(w-si,w-si);
+  float d = -1e5;
+  for(int j=0;j<NSEED;j++){
+    if(j==i) continue;
+    vec3 sj = uSeeds[j].xyz;
+    float dj = dot(w-sj,w-sj);
+    d = max(d, (di-dj)/(2.0*length(sj-si)));
+  }
+  return d;
 }
 
 // glaze thickness 0..~2 on the surface

@@ -140,6 +140,52 @@ const Bowl = (() => {
     return out;
   }
 
+  // mirror of fracWarp() in bowl.glsl
+  function fracWarp(p) {
+    const [x, y, z] = p;
+    return [
+      x + 0.030 * Math.sin(z * 9.1 + 1.3) + 0.012 * Math.sin(y * 23.7 + 0.4) + 0.005 * Math.sin(z * 61.0 + 2.9),
+      y + 0.030 * Math.sin(x * 9.1 + 4.1) + 0.012 * Math.sin(z * 23.7 + 2.2) + 0.005 * Math.sin(x * 61.0 + 0.7),
+      z + 0.030 * Math.sin(y * 9.1 + 2.7) + 0.012 * Math.sin(x * 23.7 + 5.1) + 0.005 * Math.sin(y * 61.0 + 4.4),
+    ];
+  }
+  function cellOf(p) {
+    const w = fracWarp(p);
+    let best = 0, bd = 1e9;
+    SEEDS.forEach((s, i) => { const d = (w[0] - s[0]) ** 2 + (w[1] - s[1]) ** 2 + (w[2] - s[2]) ** 2; if (d < bd) { bd = d; best = i; } });
+    return best;
+  }
+  // Per-shard centroid, bounding radius and mean outward normal, from surface samples.
+  function shardInfo() {
+    const prof = resample(FINAL, 48);
+    const acc = SEEDS.map(() => ({ c: [0, 0, 0], n: [0, 0, 0], k: 0, pts: [] }));
+    for (let i = 0; i < prof.length - 1; i++) {
+      const [r, y, th] = prof[i];
+      const [r1, y1] = prof[i + 1];
+      const dr = r1 - r, dy = y1 - y, L = Math.hypot(dr, dy);
+      const nr = dy / L, ny = -dr / L;          // outward normal in (r,y)
+      for (let k = 0; k < 96; k++) {
+        const a = k / 96 * Math.PI * 2;
+        for (const side of [-1, 1]) {
+          const rr = r + nr * th * side, yy = y + ny * th * side;
+          const p = [rr * Math.cos(a), yy, rr * Math.sin(a)];
+          const c = cellOf(p);
+          const A = acc[c];
+          A.c[0] += p[0]; A.c[1] += p[1]; A.c[2] += p[2]; A.k++;
+          A.n[0] += nr * Math.cos(a); A.n[1] += ny; A.n[2] += nr * Math.sin(a);
+          A.pts.push(p);
+        }
+      }
+    }
+    return acc.map(A => {
+      const c = A.c.map(v => v / Math.max(1, A.k));
+      let r = 0;
+      for (const p of A.pts) r = Math.max(r, Math.hypot(p[0] - c[0], p[1] - c[1], p[2] - c[2]));
+      const nl = Math.hypot(...A.n) || 1;
+      return { c, r: r + 0.06, n: A.n.map(v => v / nl), count: A.k };
+    });
+  }
+
   // inner radius of the cavity at height y (for the liquid surface)
   function innerRadius(y) {
     const prof = FINAL;
@@ -153,6 +199,6 @@ const Bowl = (() => {
     return 0.0;
   }
 
-  return { NPROF, resample, STAGES, FINAL, FOOT, lerpProfile, packProfile, SEEDS, NSEED, packSeeds, IMPACT, innerRadius, rng, centerAt };
+  return { fracWarp, cellOf, shardInfo, NPROF, resample, STAGES, FINAL, FOOT, lerpProfile, packProfile, SEEDS, NSEED, packSeeds, IMPACT, innerRadius, rng, centerAt };
 })();
 if (typeof module !== 'undefined') module.exports = Bowl;
