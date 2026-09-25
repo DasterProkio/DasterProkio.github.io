@@ -14,7 +14,7 @@ const b = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftsha
 const p = await b.newPage({ viewport: { width: W, height: H } });
 p.setDefaultTimeout(900000);
 p.on('pageerror', e => console.log('[pageerror]', e.message));
-await p.goto('http://localhost:8123/index.html?capture', { waitUntil: 'load' });
+await p.goto('http://localhost:8123/index.html?capture' + (process.env.K ? '&k=' + process.env.K : ''), { waitUntil: 'load' });
 await p.waitForFunction(() => window.__ready || window.__error, null, { timeout: 600000 });
 const tStart = Date.now();
 for (let n = n0; n < n1; n++) {
