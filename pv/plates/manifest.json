@@ -1,4 +1,19 @@
 {
+ "cubefield": {
+  "fps": 30,
+  "frames": 91,
+  "rendered_every": 2
+ },
+ "glass": {
+  "fps": 30,
+  "frames": 97,
+  "rendered_every": 2
+ },
+ "kv": {
+  "fps": 30,
+  "frames": 91,
+  "rendered_every": 2
+ },
  "lens": {
   "fps": 30,
   "frames": 133,
@@ -13,5 +28,10 @@
   "fps": 30,
   "frames": 94,
   "rendered_every": 1
+ },
+ "wall": {
+  "fps": 30,
+  "frames": 91,
+  "rendered_every": 2
  }
 }
