@@ -71,11 +71,12 @@ Surf bowlSurface(vec3 p, vec3 n, vec3 v){
 
   // ---------- glaze
   float t = glazeThickness(p, h);
-  float cov = sat(t*4.0);
+  float rawCov = smoothstep(1.02-uGlazeRaw*1.1, 1.04-uGlazeRaw*1.1, h.s)*step(0.001,uGlazeRaw);
+  float cov = sat(t*4.0)*max(rawCov, uMelt);
   if(cov>0.0){
     // raw slip (unfired glaze powder)
     vec3 slip = vec3(0.70,0.72,0.70)*(0.95+0.08*grain);
-    float rawAmt = uGlazeRaw*(1.0-uMelt);
+    float rawAmt = rawCov*(1.0-uMelt);
     // melted celadon: Beer-Lambert over the body + milky scatter
     vec3 sigma = vec3(0.62,0.26,0.33);
     float tt = t*(1.0+0.15*gnoise(p*7.0));
@@ -99,7 +100,7 @@ Surf bowlSurface(vec3 p, vec3 n, vec3 v){
       float reveal = smoothstep(c1.y*0.8, c1.y*0.8+0.2, uCrackle);
       crk = max(l1*reveal, l2*smoothstep(0.4,1.0,uCrackle)*step(0.55,c2.y));
       crk *= 0.55+0.45*sat(gnoise(p*5.0)+0.5);
-      vec3 crackCol = mix(glazeCol*1.18+0.03, vec3(0.28,0.16,0.07), uStain*(h.side>0.0?1.0:0.6));
+      vec3 crackCol = mix(glazeCol*1.4+0.06, vec3(0.28,0.16,0.07), uStain*(h.side>0.0?1.0:0.6));
       glazeCol = mix(glazeCol, crackCol, crk*0.8);
     }
 
@@ -121,8 +122,8 @@ Surf bowlSurface(vec3 p, vec3 n, vec3 v){
 
   // ---------- incandescence
   if(uHeat>0.0){
-    float T = mix(850.0, 1560.0, uHeat);
-    s.emit = blackbody(T)*pow(uHeat,2.2)*6.0*(0.85+0.15*grain);
+    float T = mix(800.0, 1330.0, uHeat);
+    s.emit = blackbody(T)*pow(uHeat,2.2)*2.5*(0.85+0.15*grain);
   }
 
   // ---------- kintsugi gold

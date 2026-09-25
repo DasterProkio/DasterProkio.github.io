@@ -21,6 +21,86 @@ const Film = (() => {
     return { uCamPos: eye, uCamRot: GLX.lookAt(eye, target, roll, up), uFov: fov };
   }
 
+  // ------------------------------------------------------------------ CLAY
+  const CLAY0 = bar(6), CLAY1 = bar(17);
+  const clay = (() => {
+    const S = Bowl.STAGES;
+    // throwing choreography (local seconds): centre (cone up/down), open, pull, shape
+    const keys = [
+      [0, S.LUMP], [3.5, S.LUMP], [6.0, S.CONE], [8.0, S.LUMP], [10.5, S.OPENED],
+      [14.0, S.CYLINDER], [18.0, S.THROWN], [26.0, S.THROWN], [29.5, S.FINAL],
+    ];
+    function profileAt(lt) {
+      if (lt <= keys[0][0]) return keys[0][1];
+      for (let i = 1; i < keys.length; i++) if (lt <= keys[i][0]) {
+        const x = ease.io((lt - keys[i - 1][0]) / (keys[i][0] - keys[i - 1][0]));
+        return Bowl.lerpProfile(keys[i - 1][1], keys[i][1], x);
+      }
+      return keys[keys.length - 1][1];
+    }
+    // wheel speed (rev/s): spins up, steady, slows to a stop at ~21s
+    const rps = track([[0, 1.6], [18, 1.6], [21.5, 0.0, 'out']]);
+    function spinAt(lt) { // integrate
+      let a = 0; const dt = 0.05;
+      for (let x = 0; x < lt; x += dt) a += rps(x) * dt * Math.PI * 2;
+      return a;
+    }
+    const dry = track([[22, 0], [30, 1, 'io']]);
+    const foot = track([[26, 0], [29.5, 1, 'io']]);
+    const glaze = track([[30, 0], [34, 1, 'io']]);
+    const sunA = track([[0, 0.0], [21, 0.1], [34, 1.0, 'io']]);
+    const camPath = path([[0.0, 3.4, -0.4], [0.8, 2.4, -2.2], [1.8, 1.4, -2.6], [2.3, 1.2, -1.8], [2.4, 1.3, -0.9]]);
+    const camU = track([[0, 0], [8, 0.3], [30, 0.85, 'io'], [37, 1.0]]);
+    return (t) => {
+      const lt = t - CLAY0;
+      const prof = profileAt(lt);
+      const a = sunA(lt);
+      const sun = V.norm([-1.0, mix(0.55, 0.28, a), mix(-0.25, 0.35, a)]);
+      const e = camPath(camU(lt)), tg = [0, mix(0.3, 0.35, 0.5), 0];
+      const wet = 1 - dry(lt);
+      return {
+        scene: 'studio',
+        bag: Object.assign({}, BOWL_BASE, cam(e, tg, 0.34), {
+          uTime: t, uLocal: lt, uProf: Bowl.packProfile(prof), uFootTh: Bowl.FOOT.th * foot(lt),
+          uSpin: spinAt(lt), uWheelSpin: spinAt(lt), uRidge: 0.0022 * wet, uWet: wet, uDry: dry(lt),
+          uGlazeRaw: glaze(lt), uMelt: 0, uHeat: 0, uAsh: 0, uCrackle: 0, uStain: 0, uGold: 0,
+          uWobble: 0.012 * TL.smooth(14, 18, lt), uOval: 0.015 * TL.smooth(20, 26, lt),
+          uSun: sun, uSunCol: V.mul(mix([1.0, 0.95, 0.88], [1.0, 0.72, 0.45], a), 5.0), uWater: wet, uDust: 1, uWarm: 0.15 + 0.6 * a,
+        }),
+        post: { exposure: 1.1, focus: V.len(V.sub(tg, e)), aperture: 0.8, maxCoc: 9, bloom: 0.08, grain: 0.035 },
+      };
+    };
+  })();
+
+  // ------------------------------------------------------------------ FIRE
+  const FIRE0 = bar(17), FIRE1 = bar(29);
+  const fire = (() => {
+    const fireK = track([[0, 0.35], [5, 1.0, 'io'], [26, 1.0], [30, 0.0, 'in']]);
+    const wallK = track([[0, 0.35], [10, 0.9, 'io'], [26, 1.0], [33, 0.0, 'out']]);
+    const heat = track([[2, 0.0], [20, 0.95, 'io'], [26, 1.0], [34, 0.0, 'out']]);
+    const melt = track([[10, 0.0], [21, 1.0, 'io']]);
+    const ash = track([[4, 0.0], [24, 0.55, 'io']]);
+    const ember = track([[26, 0], [30, 1.0], [37, 0.0]]);
+    const door = track([[31, 0], [38, 1.0, 'io']]);
+    const crackle = track([[32, 0], [39, 1.0, 'lin']]);
+    const camPath = path([[2.4, 1.3, -0.9], [2.0, 1.0, -1.8], [1.2, 0.8, -2.4], [0.7, 0.8, -2.0], [0.4, 0.85, -1.6]]);
+    const camU = track([[0, 0], [26, 0.6, 'io'], [40, 1.0, 'io']]);
+    return (t) => {
+      const lt = t - FIRE0;
+      const e = camPath(camU(lt)), tg = V.mix([0, 0.35, 0], [0.05, 0.45, 0.2], TL.smooth(30, 40, lt));
+      return {
+        scene: 'kiln',
+        bag: Object.assign({}, BOWL_BASE, cam(e, tg, 0.34), {
+          uTime: t, uLocal: lt, uWet: 0, uDry: 1, uGlazeRaw: 1, uMelt: melt(lt), uHeat: heat(lt), uAsh: ash(lt),
+          uCrackle: crackle(lt), uStain: 0, uGold: 0,
+          uFire: fireK(lt), uWallT: wallK(lt), uDoor: door(lt), uEmber: ember(lt),
+        }),
+        post: { exposure: mix(0.55, 1.0, TL.smooth(27, 33, lt)), focus: V.len(V.sub(tg, e)), aperture: 0.7, maxCoc: 9, bloom: 0.12, bloomThresh: 1.0, grain: 0.04,
+          shimmer: fireK(lt) },
+      };
+    };
+  })();
+
   // ------------------------------------------------------------------ LIFE
   // Bars 29..47. A lifetime at the table, told in time-lapse.
   const LIFE0 = bar(29), LIFE1 = bar(47);
@@ -106,7 +186,9 @@ const Film = (() => {
   })();
 
   const SHOTS = [
-    { name: 'life', t0: 0, t1: BRK0, fn: life },
+    { name: 'clay', t0: 0, t1: CLAY1, fn: clay },
+    { name: 'fire', t0: CLAY1, t1: FIRE1, fn: fire },
+    { name: 'life', t0: FIRE1, t1: BRK0, fn: life },
     { name: 'break', t0: BRK0, t1: SEAM0, fn: brk },
     { name: 'seam', t0: SEAM0, t1: 1e9, fn: seam },
   ];

@@ -83,3 +83,24 @@ Running production log. Newest entries at the bottom of each section.
   - **Result:** a canyon receding across a jade sea toward a low sun, the
     gold river arriving from the horizon, then the rise to the whole
     bowl. Proven. The rise framing needs direction work.
+- Studio (clay) scene (`scenes/studio.glsl`).
+  - Window shaft with analytic occlusion, dust motes, slip-covered wheel
+    head, splash pan, blurred shelf of pots.
+  - Throwing choreography: lump, cone, lump (centring), opened,
+    cylinder, thrown, trimmed (foot grows), dipped (raw glaze from the
+    rim down).
+  - **Bug:** wet clay came out green because glaze colour was applied
+    before any glaze existed. Glaze is now gated on
+    `max(rawCoverage, melt)`.
+- Kiln scene (`scenes/kiln.glsl`).
+  - Brick vault with ash-glaze drips; volumetric flame; sparks; ember
+    bed; the door opens to cool dawn light while the crackle forms.
+  - First pass was an overexposed orange soup. Rebalanced:
+    - Sparser flame tongues with noise stretched along the flow, plus
+      ridged filaments.
+    - Walls cooler and dimmer; the bowl cooler than the flames.
+    - Exposure ramps down at the peak.
+  - DOF blurred the flames because it used the depth of the wall behind
+    them. The fire now writes a luminance-weighted depth.
+  - TODO (review): more contrast between the tongues; the other wares
+    still look like eggs; tune the start of the fire.
