@@ -193,3 +193,59 @@ Running production log. Newest entries at the bottom of each section.
 15. Celadon rim: speckled white sparkle at bowl scale (aliasing in the
     thin-glaze rim).
 16. Steam colour follows dusk sun too strongly.
+
+### Fixes after pass 1
+- **Fire (#2)**: rebuilt. Flames are now discrete vertical tongues (value noise, domain warp,
+  hard threshold) in a volume clipped to the firebox region. The threshold stays high so the
+  build comes from reach, speed and temperature, never from filling the air. Tried and
+  rejected on the way: (a) tongues elongated along the draught read as fog because they are
+  seen end-on; (b) ridged "flame sheet" noise was too thin for 36 samples and aliased into
+  fuzz; (c) higher absorption made an opaque orange wall. Air in front of the bowl is kept
+  clear, flames are mirrored in the molten glaze, the glaze glow flows downward, and a
+  `uWhite` peak whitens walls and flames at 21–25 s.
+- **Cooled kiln (#3)**: shouldered jar, stacked bowls, bottle with ash glaze gathered on the
+  shoulders; smouldering ember bed (breathing fbm under grey ash) replaces the polka dots;
+  dawn light now rakes in from the door side instead of flat from the camera.
+- **Climax (#8)**: `uGlory`, a warm dawn behind the bowl, floods the void at bar 62 with a
+  rim light that catches the gold. The seam sun disc is gone (soft glow only). Pull-out ends
+  closer (altitude 2.3).
+- **Room (#4 #5 #12 #14)**: warm, lighter wood; table coat 0.35→0.14 (it mirrored the shoji
+  and read blue-grey); warm fill through the paper; moonlit nights; a piecewise time-lapse
+  warp gives night only ~20% of each day; lower, closer camera.
+- **Fall (#6)**: the camera tracks the falling bowl; it tumbles and lands on its foot exactly
+  where the shatter pose begins (the cut at the impact is now seamless).
+- **Memories (#7 #13)**: seasonal shoji openings widened so blossom, green, maple and snow
+  dominate each portal; brighter garden; thin gold edge instead of beige halos; portal
+  exposure 1.7→1.25; portal covers the unglazed body too.
+- **Ending (#1 #10)**: brush tip carries the stroke's ink load (no detached dot); gold ensō is
+  brushed metal with streaks along the stroke and a slowly sweeping light; title is a
+  vertical 金継ぎ column in the right margin with a vermilion seal (継 cut out) and small
+  KINTSUGI; the film runs to bar 78 so the title holds over the last chord's decay.
+- **Studio (#11)**: slip smeared around the wheel (long along the circumference); crisper
+  wet gloss.
+
+## Review pass 2 (53 frames, every 5 s)
+17. **Crusty white rim** at 95–150 and 225–235. Debugged with overrides and debug views
+    (side classification, glaze thickness, albedo, normals): not ash, not side, not the sun.
+    Two causes. (a) Glossy glaze at grazing angles mirrors the bright shoji, and the table's
+    far edge in that reflection is a hard, wobble-distorted line; (b) `roomReflect` switched
+    abruptly from ambient to wall at `r.z>0.05`. Fix: satin celadon (coat roughness
+    0.045→0.1), smooth wall blend, a soft angular table edge, and coat Fresnel capped at 0.5
+    for room reflections. Also dropped the Phong normal correction at the lip.
+    *Tooling lesson*: uniforms persist per program, so an override on one frame leaks into
+    later frames of the same capture run. Bisection runs use one frame per run.
+18. Memory portal upside down when its shard flips: the portal's up vector now comes from
+    the camera, not the shard.
+19. Mended top-down: tea read as moss and steam as a blob. Matcha is now fine foam with
+    micro-bubbles that thins at the wall; steam fades as the camera rises.
+20. **Sun arc bug**: `a=(day-0.25)*π` put "noon" at sunset. Fixed to 2π. The sun now crosses
+    the shoji gap at midday and lays a blade across the table; the mended act is set late
+    morning to noon, so the gold bowl sits in sunlight.
+
+## Review pass 3 (53 frames + 20 transition frames)
+- All seven transitions checked at 25/50/75%: continuous. Fixed the impact cut (#6 above).
+- Fire: flames in front of the bowl masked (haze at the peak came from out-of-focus near
+  flames); bowl incandescence ×2.5→×1.5 so shading survives.
+- Tea foam colour toned down (lime in direct sun).
+- Remaining: the bowl at the fire peak is still fairly flat (acceptable: the kiln interior
+  is near-isothermal); nights are dark (brief now).

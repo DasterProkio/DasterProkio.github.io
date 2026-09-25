@@ -44,7 +44,7 @@ float sdTenmoku(vec3 p){
 
 vec3 sunDir(Mem m){
   // sun travels across the sky beyond the shoji (+z), lower in winter
-  float a = (m.day-0.25)*PI;            // 0 at sunrise, PI at sunset
+  float a = (m.day-0.25)*TAU;           // 0 at sunrise (0.25), PI at sunset (0.75)
   float elev = mix(0.95, 0.5, sat(abs(m.season-1.0)/2.0)) ;
   vec3 d = vec3(-cos(a)*0.9, sin(a)*elev, 1.0);
   return normalize(d);
@@ -245,18 +245,25 @@ float teaHeight(float lvl){ return mix(0.16, 0.56, lvl); }
 
 // cheap reflection lookup: shoji wall / table / dark room, no occlusion
 vec3 roomReflect(vec3 p, vec3 r, float rough, Mem m){
-  vec3 c = vec3(0.0);
-  if(r.z>0.05){
-    float t=(WALLZ-p.z)/r.z; vec3 w=p+r*t;
-    if(w.y>FLOORY && w.y<16.0) c = wallRadianceR(w, r, m, rough);
-    else c = skyColor(m,0.3)*0.05;
-  } else if(r.y<-0.05){
-    float t=-p.y/r.y; vec3 w=p+r*t;
-    vec2 tr = wallTransmit(w, sunDir(m), m);
-    c = woodTable(w)*(sunColor(m)*tr.x*sat(sunDir(m).y) + roomAmbient(w, vec3(0,1,0), m));
-  } else {
-    c = roomAmbient(p, -r, m)*0.25;
+  // behind the camera: the dim room
+  vec3 back = roomAmbient(p, -r, m)*0.25;
+  // the shoji wall
+  vec3 wc = back;
+  if(r.z>0.0){
+    float tW = (WALLZ-p.z)/max(r.z,1e-3); vec3 w = p+r*tW;
+    wc = (w.y>FLOORY && w.y<16.0) ? wallRadianceR(w, r, m, rough) : skyColor(m,0.3)*0.05;
+    wc = mix(back, wc, smoothstep(0.0, 0.25, r.z));
   }
+  // the table top, with a soft (roughness-dependent, angular) far edge
+  vec3 tc = back; float onTable = 0.0;
+  if(r.y<0.0){
+    float tT = -p.y/min(r.y,-1e-3); vec3 wt = p+r*tT;
+    vec2 tr = wallTransmit(wt, sunDir(m), m);
+    tc = woodTable(wt)*(sunColor(m)*tr.x*sat(sunDir(m).y) + roomAmbient(wt, vec3(0,1,0), m));
+    float w = (0.04 + rough*1.2)*tT;
+    onTable = smoothstep(-w, w, TABLE_HZ-wt.z)*smoothstep(-w, w, TABLE_HX-abs(wt.x))*smoothstep(0.0, 0.08, -r.y);
+  }
+  vec3 c = mix(wc, tc, onTable);
   // blur toward average as roughness grows
   return mix(c, roomAmbient(p, r, m)*0.8, sat(rough*3.5));
 }
@@ -281,7 +288,7 @@ vec3 roomLightSurf(Surf s, vec3 p, vec3 v, Mem m, float ao){
   if(s.coat>0.0){
     coat = s.coat*(specGGX(s.cn, v, L, s.coatRough, vec3(0.04))*direct
                   + specGGX(s.cn, v, Lc, s.coatRough, vec3(0.04))*cl
-                  + roomReflect(p, reflect(-v,s.cn), s.coatRough, m)*F_Schlick1(0.04,nv)*ao);
+                  + roomReflect(p, reflect(-v,s.cn), s.coatRough, m)*min(F_Schlick1(0.04,nv), 0.5)*ao);
   }
   return dif + spec + coat + s.emit;
 }
@@ -311,15 +318,21 @@ Surf tenmokuSurface(vec3 q, vec3 n){
 // shade tea surface (matcha)
 vec3 teaShade(vec3 p, vec3 v, Mem m, float froth){
   vec3 n = vec3(0,1,0);
-  vec2 u = p.xz;
-  float bub = voronoiB(vec3(u*55.0, 1.0)).z;
-  float foam = sat(froth*(0.6+0.6*fbm(u*9.0,3)));
-  vec3 base = mix(vec3(0.10,0.17,0.02), vec3(0.42,0.58,0.16), foam);
-  base *= 0.9+0.2*smoothstep(0.2,0.6,bub);
+  vec2 u = (p - m.bowlOff).xz;
+  float rr = length(u)/max(teaRadius(teaHeight(m.tea)), 0.05);
+  float b1 = voronoiB(vec3(u*70.0, 1.0)).z;
+  float b2 = voronoiB(vec3(u*170.0, 2.0)).z;
+  // matcha: fine pale foam over most of the surface, thinning at the wall where the dark tea shows
+  float foam = froth*smoothstep(1.02, 0.78, rr + 0.14*fbm(u*6.0,3));
+  foam *= 0.88 + 0.12*smoothstep(-0.2, 0.3, fbm(u*14.0,3));
+  vec3 liquid = vec3(0.08,0.14,0.02);
+  vec3 foamC = vec3(0.37,0.47,0.19)*(0.88+0.12*smoothstep(0.03,0.2,b2))*(0.9+0.1*smoothstep(0.08,0.35,b1));
+  vec3 base = mix(liquid, foamC, foam);
   Surf s = defaultSurf(n);
-  s.alb = base; s.rough=0.5; s.coat = 1.0-foam*0.8; s.coatRough = 0.06;
-  s.n = normalize(n + vec3(gnoise(vec3(u*30.0,0.0)),0.0,gnoise(vec3(u*30.0,3.0)))*0.03*foam);
+  s.alb = base; s.rough = mix(0.3, 0.75, foam); s.coat = 1.0-foam*0.85; s.coatRough = 0.05;
+  s.n = normalize(n + vec3(gnoise(vec3(u*40.0,0.0)), 0.0, gnoise(vec3(u*40.0,3.0)))*0.04*foam);
   s.cn = n;
+  s.sss = 0.2*foam;
   return roomLightSurf(s, p, v, m, 1.0);
 }
 

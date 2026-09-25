@@ -226,8 +226,9 @@ const Film = (() => {
         if (tf > 0) {
           const k = (TL.CUE.shatter - TL.CUE.fall);                // film seconds of falling
           const u = Math.min(1, tf / k);
-          off = [HOLD[0] + 0.1 * u, HOLD[1] + (P_IMP[1] - HOLD[1]) * u * u, HOLD[2] - 0.05 * u];
-          tilt = 0.9 * u * u + 0.05;
+          // it tumbles as it falls and lands on its foot, exactly where the shatter begins
+          off = [HOLD[0] + (P_IMP[0] - HOLD[0]) * u, HOLD[1] + (P_IMP[1] - HOLD[1]) * u * u, HOLD[2] + (P_IMP[2] - HOLD[2]) * u];
+          tilt = (0.05 + 0.6 * Math.sin(Math.PI * Math.min(1, u * 1.1))) * (1 - u * u);
         }
       }
       const bowlOn = 1;
@@ -299,7 +300,7 @@ const Film = (() => {
       if (lt < plan[0].lt) {
         const k = sm(0.6, plan[0].lt, lt);
         eye = V.mix(V.add(lowEye, V.sub(o, P_IMP)), plan[0].eye, k * k);
-        tgt = V.mix(V.add(o, [0, 0.4 + 0.5 * sm(1, 6, lt), 0]), plan[0].p, sm(2, plan[0].lt, lt));
+        tgt = V.mix(V.add(o, [0, 0.35 + 0.55 * sm(1, 6, lt), 0]), plan[0].p, sm(2, plan[0].lt, lt));
       } else {
         let k = 0;
         while (k < plan.length - 1 && lt > plan[k + 1].lt) k++;
@@ -400,7 +401,7 @@ const Film = (() => {
       const tgt = V.mix([-0.15, 0.33, 0.1], [0, 0.35, 0], sm(8, 16, lt));
       const up = V.norm(V.mix([0, 1, 0], [0, 0, 1], sm(12, 18.5, lt)));
       const m = {
-        uMemDay: mix(0.3, 0.37, sm(-1, 30, lt)), uMemSeason: 0.1, uMemTwo: 0, uMemGap: 1.45, uMemCandle: 0, uMemSteam: 1,
+        uMemDay: mix(0.44, 0.5, sm(-1, 22, lt)), uMemSeason: 0.1, uMemTwo: 0, uMemGap: 1.45, uMemCandle: 0, uMemSteam: 1 - sm(8, 13, lt),
         uMemTea: 0.6, uMemTea2: 0, uMemOpen: 0.5, uMemRing: 1, uBowlOn: 1, uBowlOff: [0, 0, 0], uBowlTilt: 0, uBeams: 0.8,
       };
       return {

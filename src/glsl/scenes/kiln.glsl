@@ -87,7 +87,7 @@ float fireField(vec3 p, out float core){
   // fire lives behind and around the bowl, strongest toward the firebox. It stays sparse:
   // the build is carried by reach, speed and heat, never by filling the air.
   float src = smoothstep(-1.0, 3.0, p.z);
-  float f = n - hh*0.6 + 0.3*src - 0.2;
+  float f = n - hh*0.6 + 0.3*src - 0.2 - 0.4*(1.0-smoothstep(-0.9, 0.7, p.z));   // keep the air in front of the bowl clear
   float thr = mix(0.3, 0.2, uFire);
   core = sat((f-thr)*4.0);
   return smoothstep(thr, thr+0.03, f)*smoothstep(-0.05, 0.1, p.y);

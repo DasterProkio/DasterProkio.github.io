@@ -30,6 +30,7 @@ float glazeRipple(vec3 p){ return gnoise(p*22.0)+0.35*gnoise(p*61.0); }
 Surf bowlSurface(vec3 p, vec3 n, vec3 v){
   Surf s = defaultSurf(n);
   BowlHit h = bowlInfo(p);
+  h.nDelta *= 1.0 - smoothstep(0.86, 0.94, h.s);   // no smoothing correction at the lip (cap joints)
   { vec2 dr = normalize(p.xz+1e-6); n = normalize(n + vec3(dr.x*h.nDelta.x, h.nDelta.y, dr.y*h.nDelta.x)); s.n=n; s.cn=n; }
   vec3 pr = rotYv(p, uSpin);            // detail rotating with the wheel
   float a = atan(pr.z, pr.x);
@@ -112,7 +113,7 @@ Surf bowlSurface(vec3 p, vec3 n, vec3 v){
     // melted glaze is a clear coat
     float coat = cov*uMelt;
     s.coat = max(s.coat, coat);
-    s.coatRough = mix(s.coatRough, 0.045, coat);
+    s.coatRough = mix(s.coatRough, 0.1, coat);          // satin celadon: soft reflections, never a mirrored lattice
     vec3 cn = n;
     BUMP(cn, p, glazeRipple, 0.004, 0.0004*uMelt);
     s.cn = normalize(mix(s.cn, cn, coat));
@@ -127,7 +128,7 @@ Surf bowlSurface(vec3 p, vec3 n, vec3 v){
     // thin walls and the rim run hotter than the foot; the glaze shimmers as it boils
     float T = mix(800.0, 1330.0, uHeat) + 90.0*uHeat*(h.s-0.55) + 25.0*uHeat*gnoise(p*18.0+vec3(0.0,uTime*0.6,0.0))
             + 70.0*uHeat*uMelt*(fbm(vec3(p.xz*5.0, p.y*9.0+uTime*0.25), 3));   // molten glaze running down
-    s.emit = blackbody(T)*pow(uHeat,2.2)*2.5*(0.85+0.15*grain);
+    s.emit = blackbody(T)*pow(uHeat,2.2)*1.5*(0.85+0.15*grain);
   }
 
   // ---------- kintsugi gold

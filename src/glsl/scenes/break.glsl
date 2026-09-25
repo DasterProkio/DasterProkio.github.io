@@ -43,7 +43,9 @@ vec3 portalView(int i, vec3 q, vec3 dl){
   vec3 n = uShardN[i].xyz;
   float sd = dot(dl, n);
   vec3 f = (sd>=0.0 ? 1.0 : -1.0)*n;
-  vec3 right = normalize(cross(vec3(0,1,0), f));
+  // the memory stays upright on screen, however the shard tumbles
+  vec3 upL = qinv(uShardQ[i], uCamRot[1]);
+  vec3 right = normalize(cross(upL, f) + vec3(1e-4, 0.0, 0.0));
   vec3 up = cross(f, right);
   vec3 c = uShardC[i].xyz;
   vec3 rel = q-c;
@@ -141,7 +143,7 @@ void main(){
         vec3 mem = portalView(i, q, qinv(Q, rd));
         float F = F_Schlick1(0.04, nv);
         vec3 tint = mix(vec3(1.0), vec3(0.82,1.0,0.93), 0.35);
-        float k = strength*inner*mix(0.8, 1.0, glazed)*(1.0-F);
+        float k = strength*inner*(1.0-F);
         lit = mix(lit, mem*tint*1.25 + s.coat*specGGX(s.cn, v, L, s.coatRough, vec3(0.04))*key*0.5, k);
         // luminous edge where the memory meets the break
         lit += vec3(1.0,0.72,0.38)*strength*exp(-abs(cd+0.003)*700.0)*0.45;
