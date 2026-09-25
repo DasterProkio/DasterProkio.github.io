@@ -1,0 +1,39 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>spike: room</title>
+<style>html,body{margin:0;background:#000}canvas{display:block}</style></head>
+<body><canvas id="c" width="960" height="540"></canvas>
+<script src="../src/js/gl.js"></script>
+<script src="../src/js/bowl.js"></script>
+<script src="harness.js"></script>
+<script>
+(async () => {
+  const canvas = document.getElementById('c');
+  const sp = await makeSpike({ canvas, files: ['../src/glsl/common.glsl', '../src/glsl/bowl.glsl', '../src/glsl/bowlmat.glsl', '../src/glsl/room.glsl', '../src/glsl/scenes/life.glsl'] });
+  const TEN = [[0.0,0.07,0.03],[0.12,0.075,0.03],[0.3,0.2,0.026],[0.46,0.42,0.022],[0.54,0.6,0.02],[0.555,0.64,0.018]];
+  const ten = new Float32Array(24); TEN.forEach((p,i)=>{ten[i*4]=p[0]*0.95;ten[i*4+1]=p[1]*0.95;ten[i*4+2]=p[2];});
+  const base = {
+    uProf: Bowl.packProfile(Bowl.FINAL), uFoot: Bowl.FOOT.stroke, uFootTh: Bowl.FOOT.th, uProf2: ten,
+    uWobble: 0.012, uOval: 0.015, uRidge: 0.0, uSpin: 0,
+    uWet: 0, uDry: 1, uGlazeRaw: 0, uMelt: 1, uHeat: 0, uAsh: 0.3, uCrackle: 1, uStain: 0.3, uGold: 0,
+    uSeeds: Bowl.packSeeds(), uFov: 0.36,
+    uMemDay: 0.35, uMemSeason: 0.2, uMemTwo: 1, uMemGap: 1.45, uMemCandle: 0, uMemSteam: 1, uMemTea: 0.6, uMemTea2: 0.6,
+    uMemOpen: 0.5, uMemRing: 0, uBowlOn: 1, uBowlOff: [0,0,0], uBowlTilt: 0, uBeams: 1, uTime: 3.0,
+  };
+  const presets = [
+    { name: 'spring morning', cam: [2.2, 2.0, -4.2], tgt: [-0.4, 0.4, 0.6] },
+    { name: 'summer noon', cam: [-2.8, 1.6, -3.4], tgt: [-0.5, 0.4, 0.8], uMemDay: 0.5, uMemSeason: 1.0, uMemGap: 1.0 },
+    { name: 'autumn dusk', cam: [2.8, 1.2, -3.0], tgt: [-0.5, 0.35, 0.8], uMemDay: 0.7, uMemSeason: 2.1 },
+    { name: 'winter night candle', cam: [2.0, 2.2, -3.8], tgt: [0.3, 0.4, 0.6], uMemDay: 0.9, uMemSeason: 3.0, uMemCandle: 1, uMemOpen: 0.0 },
+    { name: 'alone winter', cam: [1.2, 1.4, -3.2], tgt: [-0.5, 0.3, 0.4], uMemDay: 0.4, uMemSeason: 3.0, uMemTwo: 0, uMemRing: 1, uMemSteam: 0, uMemTea: 0, uMemOpen: 0.3 },
+    { name: 'wide', cam: [5.0, 4.5, -9.0], tgt: [0, 1.5, 2.0], uMemDay: 0.33, uMemSeason: 0.1 },
+  ];
+  window.__renderAt = (i) => {
+    const pr = Object.assign({}, base, presets[i]);
+    pr.uCamPos = pr.cam; pr.uCamRot = GLX.lookAt(pr.cam, pr.tgt);
+    sp.render(pr, 1.0);
+    return presets[i].name;
+  };
+  window.__ready = true;
+  if (!location.search.includes('capture')) window.__renderAt(0);
+})().catch(e => { document.body.innerHTML = '<pre style="color:#f88">' + e.message + '</pre>'; window.__error = e.message; });
+</script></body></html>

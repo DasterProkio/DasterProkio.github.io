@@ -1,0 +1,813 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kintsugi — a real-time film</title>
+<meta name="description" content="A four-minute real-time procedural short film about a tea bowl: made, loved, broken, and mended with gold. One HTML file, no assets.">
+<style>
+  html,body{margin:0;height:100%;background:#000;overflow:hidden;cursor:default}
+  #film{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:block;background:#000}
+  #ui{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+      color:#cfc6b8;font-family:"Iowan Old Style","Palatino Linotype",Palatino,"Hiragino Mincho ProN","Yu Mincho",Georgia,serif;
+      background:#050505;transition:opacity 2.5s ease;user-select:none}
+  #ui.gone{opacity:0;pointer-events:none}
+  #ui h1{font-weight:400;letter-spacing:.9em;margin:0 0 .6em .9em;font-size:clamp(20px,3.2vw,40px)}
+  #ui .sub{letter-spacing:.25em;font-size:clamp(10px,1.1vw,13px);opacity:.55;text-transform:lowercase}
+  #ui .go{margin-top:3.2em;letter-spacing:.35em;font-size:clamp(10px,1.1vw,13px);opacity:0;transition:opacity 1.2s}
+  #ui.ready{cursor:pointer}
+  #ui.ready .go{opacity:.8;animation:breathe 3.2s ease-in-out infinite}
+  #ui .enso{width:64px;height:64px;margin-bottom:2.2em;opacity:.7}
+  #status{position:absolute;bottom:8%;left:0;right:0;text-align:center;font-size:11px;letter-spacing:.2em;opacity:.45}
+  @keyframes breathe{50%{opacity:.35}}
+  #dbg{position:absolute;left:10px;right:10px;bottom:6px;color:#ff0;font:12px monospace;z-index:9}
+</style>
+</head>
+<body>
+<canvas id="film"></canvas>
+<div id="ui">
+  <svg class="enso" viewBox="0 0 64 64"><path d="M47 13 A24 24 0 1 0 55 30" fill="none" stroke="#cfc6b8" stroke-width="3.2" stroke-linecap="round"/></svg>
+  <h1>KINTSUGI</h1>
+  <div class="sub">a real-time film &nbsp;·&nbsp; four minutes &nbsp;·&nbsp; sound on</div>
+  <div class="go">click to begin</div>
+  <div id="status">preparing</div>
+</div>
+<script>
+const SRC = {"post":"//@@ POST_COMPOSITE\n// Transition compositor: blends scene A and B in world space.\nprecision highp float;\nin vec2 vUv; out vec4 o;\nuniform sampler2D uA, uB;\nuniform float uMix;       // 0 = A only, 1 = B only\nuniform int   uMode;      // 0 crossfade, 1 ember burn, 2 ink bleed, 3 light bloom, 4 dark void\nuniform vec3  uCamPos; uniform mat3 uCamRot; uniform float uFov; uniform vec2 uRes;\nuniform vec3  uCenter;    // world-space origin of the transition front\nuniform float uTime;\n\nfloat h12(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }\nfloat vn(vec3 p){\n  vec3 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);\n  float n=dot(i,vec3(1.0,57.0,113.0));\n  #define H(x) fract(sin(x)*43758.5453)\n  return mix(mix(mix(H(n),H(n+1.0),f.x),mix(H(n+57.0),H(n+58.0),f.x),f.y),\n             mix(mix(H(n+113.0),H(n+114.0),f.x),mix(H(n+170.0),H(n+171.0),f.x),f.y),f.z);\n  #undef H\n}\nfloat fbm3(vec3 p){ return 0.5*vn(p)+0.25*vn(p*2.1)+0.125*vn(p*4.3)+0.0625*vn(p*8.7); }\n\nvoid main(){\n  vec4 a = texture(uA, vUv), b = texture(uB, vUv);\n  if(uMode==0 || uMix<=0.0 || uMix>=1.0){ o = mix(a,b,uMix); return; }\n  vec2 uv = (2.0*gl_FragCoord.xy-uRes)/uRes.y;\n  vec3 rd = normalize(uCamRot*vec3(uv*uFov,1.0));\n  // use the nearer surface to place the front in the world\n  float dA = a.a, dB = b.a;\n  vec3 pw = uCamPos + rd*min(dA, dB);\n  float r = length(pw-uCenter);\n  if(uMode==1){\n    // ember burn: a noisy front grows outward from the centre, glowing edge\n    float n = fbm3(pw*1.3+vec3(0.0,-uTime*0.3,0.0));\n    float front = uMix*14.0 - r + (n-0.5)*3.5;\n    float k = smoothstep(0.0, 0.35, front);\n    float edge = exp(-abs(front)*5.0)*step(0.0, 1.0-k)*(1.0-uMix*0.5);\n    vec3 c = mix(a.rgb, b.rgb, k);\n    c += vec3(3.0,0.9,0.18)*edge*(0.5+n);\n    o = vec4(c, mix(a.a,b.a,k));\n  } else if(uMode==2){\n    // ink bleed: screen-space-ish radial with fibre noise\n    float n = fbm3(vec3(uv*6.0, 1.0));\n    float front = uMix*2.6 - length(uv)*1.2 + (n-0.5)*0.8;\n    float k = smoothstep(-0.05, 0.1, front);\n    o = mix(a, b, k);\n  } else if(uMode==3){\n    // light bloom: the world brightens into white light then settles into B\n    float w = sin(uMix*3.14159);\n    vec4 m = mix(a,b,smoothstep(0.3,0.7,uMix));\n    o = vec4(m.rgb + w*w*2.5*vec3(1.0,0.85,0.6)*(0.4+0.6*fbm3(pw*0.5)), m.a);\n  } else {\n    // dark void: world dissolves into darkness from the edges of the frame\n    float n = fbm3(pw*0.8);\n    float k = smoothstep(0.0, 0.3, uMix*1.6 - length(uv)*0.5 - n*0.5);\n    o = mix(a, b, k);\n  }\n}\n\n//@@ POST_COC\n// Circle of confusion (pixels, signed: <0 near) into alpha; colour premultiplied weight\nprecision highp float;\nin vec2 vUv; out vec4 o;\nuniform sampler2D uSrc;\nuniform float uFocus, uAperture, uMaxCoc;\nvoid main(){\n  vec4 c = texture(uSrc, vUv);\n  float d = c.a;\n  float coc = uAperture*(d-uFocus)/max(d,1e-3);\n  coc = clamp(coc*uMaxCoc, -uMaxCoc, uMaxCoc);\n  o = vec4(c.rgb, coc);\n}\n\n//@@ POST_DOF\n// Half-res gather bokeh (golden-angle spiral). Input: rgb + signed CoC in pixels (full res units).\nprecision highp float;\nin vec2 vUv; out vec4 o;\nuniform sampler2D uSrc; uniform vec2 uTexel; uniform float uMaxCoc;\nvoid main(){\n  vec4 c0 = texture(uSrc, vUv);\n  float r0 = abs(c0.a);\n  vec3 acc = vec3(0); float wsum = 0.0;\n  const int N = 40;\n  float ga = 2.39996323;\n  float radius = uMaxCoc;\n  for(int i=0;i<N;i++){\n    float fi = float(i)+0.5;\n    float r = sqrt(fi/float(N))*radius;\n    vec2 off = vec2(cos(fi*ga), sin(fi*ga))*r;\n    vec4 s = textureLod(uSrc, vUv+off*uTexel, 0.0);\n    float cs = abs(s.a);\n    // sample contributes if its CoC covers this distance; background samples\n    // cannot bleed over sharper foreground\n    float w = smoothstep(r-1.0, r+0.5, cs);\n    if(s.a > c0.a+2.0) w *= smoothstep(r-1.0, r+0.5, r0);  // farther sample, only if we are blurry too\n    // bokeh highlights: slight boost of bright samples\n    w *= 1.0 + 0.8*smoothstep(1.5, 6.0, dot(s.rgb, vec3(0.3,0.5,0.2)));\n    acc += s.rgb*w; wsum += w;\n  }\n  vec3 col = wsum>0.0 ? acc/wsum : c0.rgb;\n  o = vec4(col, r0);\n}\n\n//@@ POST_DOFMIX\nprecision highp float;\nin vec2 vUv; out vec4 o;\nuniform sampler2D uSharp, uBlur;\nvoid main(){\n  vec4 s = texture(uSharp, vUv);\n  vec4 b = texture(uBlur, vUv);\n  float k = smoothstep(0.6, 2.2, abs(s.a));\n  // near-field blur spills over: use blurred coc too\n  k = max(k, smoothstep(0.8, 2.5, b.a));\n  o = vec4(mix(s.rgb, b.rgb, k), s.a);\n}\n\n//@@ POST_DOWN\n// 13-tap downsample (CoD / Jimenez) with a soft threshold on the first level\nprecision highp float;\nin vec2 vUv; out vec4 o;\nuniform sampler2D uSrc; uniform vec2 uTexel; uniform float uThresh; uniform int uFirst;\nvec3 s(vec2 d){ return texture(uSrc, vUv+d*uTexel).rgb; }\nvoid main(){\n  vec3 a=s(vec2(-2,2)), b=s(vec2(0,2)), c=s(vec2(2,2));\n  vec3 d=s(vec2(-2,0)), e=s(vec2(0,0)), f=s(vec2(2,0));\n  vec3 g=s(vec2(-2,-2)), h=s(vec2(0,-2)), i=s(vec2(2,-2));\n  vec3 j=s(vec2(-1,1)), k=s(vec2(1,1)), l=s(vec2(-1,-1)), m=s(vec2(1,-1));\n  vec3 col = e*0.125 + (a+c+g+i)*0.03125 + (b+d+f+h)*0.0625 + (j+k+l+m)*0.125;\n  if(uFirst==1){\n    float br = max(col.r, max(col.g, col.b));\n    float soft = clamp(br-uThresh+0.5, 0.0, 1.0);\n    soft = soft*soft*0.5;\n    float contrib = max(soft, br-uThresh)/max(br, 1e-4);\n    col *= contrib;\n    col = min(col, vec3(60.0));\n  }\n  o = vec4(col, 1.0);\n}\n\n//@@ POST_UP\nprecision highp float;\nin vec2 vUv; out vec4 o;\nuniform sampler2D uSrc, uPrev; uniform vec2 uTexel; uniform float uRadius;\nvoid main(){\n  vec2 d = uTexel*uRadius;\n  vec3 c = texture(uSrc, vUv+vec2(-d.x,d.y)).rgb + 2.0*texture(uSrc, vUv+vec2(0,d.y)).rgb + texture(uSrc, vUv+d).rgb\n         + 2.0*texture(uSrc, vUv+vec2(-d.x,0)).rgb + 4.0*texture(uSrc, vUv).rgb + 2.0*texture(uSrc, vUv+vec2(d.x,0)).rgb\n         + texture(uSrc, vUv-d).rgb + 2.0*texture(uSrc, vUv+vec2(0,-d.y)).rgb + texture(uSrc, vUv+vec2(d.x,-d.y)).rgb;\n  o = vec4(c/16.0 + texture(uPrev, vUv).rgb, 1.0);\n}\n\n//@@ POST_FINAL\nprecision highp float;\nin vec2 vUv; out vec4 o;\nuniform sampler2D uSrc, uBloom, uOverlay;\nuniform vec2 uRes;           // output resolution\nuniform float uExposure, uBloomAmt, uGrain, uVignette, uCA, uTime, uLetterbox, uFade, uOverlayAmt, uShimmer;\nuniform vec3 uLift, uGamma, uGain; uniform float uSat; uniform vec3 uTintShadow, uTintHigh;\nuniform float uContrast;\n\nfloat hash(vec2 p){ vec3 p3=fract(vec3(p.xyx)*0.1031); p3+=dot(p3,p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }\n\nvec3 agx(vec3 c){\n  const mat3 M = mat3(0.842479,0.0423282,0.0423756, 0.0784336,0.878468,0.0784336, 0.0792237,0.0791661,0.879142);\n  const mat3 Mi = mat3(1.19687,-0.0528968,-0.0529716, -0.0980208,1.15190,-0.0980434, -0.0990297,-0.0989612,1.15107);\n  c = M*max(c,1e-6);\n  c = clamp((log2(c)+12.47393)/16.5, 0.0, 1.0);\n  vec3 x2=c*c, x4=x2*x2;\n  c = 15.5*x4*x2 - 40.14*x4*c + 31.96*x4 - 6.868*x2*c + 0.4298*x2 + 0.1191*c - 0.00232;\n  c = Mi*c;\n  return pow(max(c,0.0), vec3(2.2));\n}\n\nvoid main(){\n  vec2 uv = vUv;\n  vec2 cc = uv-0.5;\n  // heat shimmer\n  if(uShimmer>0.0){\n    float s = sin(uv.y*60.0+uTime*9.0)*sin(uv.x*23.0-uTime*5.0);\n    uv += vec2(s, cos(uv.x*40.0+uTime*7.0))*0.0012*uShimmer;\n  }\n  // chromatic aberration grows toward the edges\n  float ca = uCA*dot(cc,cc);\n  vec3 col;\n  col.r = texture(uSrc, uv - cc*ca).r;\n  col.g = texture(uSrc, uv).g;\n  col.b = texture(uSrc, uv + cc*ca).b;\n  vec3 bl = texture(uBloom, uv).rgb;\n  col += bl*uBloomAmt;\n  col *= uExposure;\n  col = agx(col);\n  // grade (display-referred)\n  col = pow(max(col,0.0), vec3(1.0/2.2));\n  float l = dot(col, vec3(0.2126,0.7152,0.0722));\n  col = mix(vec3(l), col, uSat);\n  col = (col-0.5)*uContrast+0.5;\n  col = col*uGain + uLift*(1.0-col);\n  col = pow(max(col,0.0), 1.0/uGamma);\n  l = dot(col, vec3(0.2126,0.7152,0.0722));\n  col *= mix(uTintShadow, uTintHigh, smoothstep(0.0,1.0,l));\n  // vignette\n  vec2 vv = cc*vec2(uRes.x/uRes.y,1.0);\n  col *= mix(1.0, smoothstep(1.25, 0.25, length(vv)), uVignette);\n  // overlay (paper, titles) in display space\n  vec4 ov = texture(uOverlay, vUv);\n  col = mix(col, ov.rgb, ov.a*uOverlayAmt);\n  // film grain (luma-weighted) + dither\n  float g = hash(gl_FragCoord.xy + fract(uTime*7.13)*1000.0) - 0.5;\n  col += g*uGrain*(0.4+0.6*sqrt(max(l,0.0)));\n  col += (hash(gl_FragCoord.xy*1.3+17.0)-0.5)/255.0;\n  col *= uFade;\n  // letterbox\n  float bar = (1.0 - uRes.x/uRes.y/uLetterbox)*0.5;\n  if(uLetterbox>0.0 && (vUv.y < bar || vUv.y > 1.0-bar)) col = vec3(0);\n  o = vec4(col, 1.0);\n}\n","scenes":{"life":"#version 300 es\n// ---------------------------------------------------------------- common\nprecision highp float;\nprecision highp int;\n\nin vec2 vUv;\nuniform vec2  uRes;\nuniform float uTime;      // film time, seconds\nuniform float uLocal;     // scene-local time\nuniform vec3  uCamPos;\nuniform mat3  uCamRot;\nuniform float uFov;       // tan(fov/2)\nuniform vec2  uJitter;    // subpixel jitter in pixels\n\n#define PI 3.14159265359\n#define TAU 6.28318530718\n\nfloat sat(float x){ return clamp(x,0.,1.); }\nvec3  sat(vec3 x){ return clamp(x,0.,1.); }\nfloat sq(float x){ return x*x; }\nfloat lin(float a,float b,float x){ return sat((x-a)/(b-a)); }\nmat2  rot(float a){ float c=cos(a),s=sin(a); return mat2(c,s,-s,c); }\n\n// ---- hashing (integer based, stable across GPUs)\nuint hashu(uint x){ x ^= x>>16; x *= 0x7feb352du; x ^= x>>15; x *= 0x846ca68bu; x ^= x>>16; return x; }\nfloat hash11(float p){ return float(hashu(floatBitsToUint(p)))*(1.0/4294967296.0); }\nfloat hash12(vec2 p){ uvec2 q = uvec2(ivec2(floor(p))); return float(hashu(q.x ^ hashu(q.y + 0x9e3779b9u)))*(1.0/4294967296.0); }\nfloat hash13(vec3 p){ uvec3 q = uvec3(ivec3(floor(p))); return float(hashu(q.x ^ hashu(q.y ^ hashu(q.z + 0x632be5abu))))*(1.0/4294967296.0); }\nvec3  hash33(vec3 p){\n  uvec3 q = uvec3(ivec3(floor(p)));\n  uint h = hashu(q.x ^ hashu(q.y ^ hashu(q.z)));\n  return vec3(float(h), float(hashu(h)), float(hashu(h+1u)))*(1.0/4294967296.0);\n}\nvec2  hash22(vec2 p){\n  uvec2 q = uvec2(ivec2(floor(p)));\n  uint h = hashu(q.x ^ hashu(q.y));\n  return vec2(float(h), float(hashu(h)))*(1.0/4294967296.0);\n}\n// screen-space blue-ish noise for dithering / jittering ray starts\nfloat ign(vec2 p){ return fract(52.9829189*fract(dot(p, vec2(0.06711056,0.00583715)))); }\n\n// ---- value noise\nfloat vnoise(vec3 p){\n  vec3 i=floor(p), f=fract(p);\n  vec3 u=f*f*(3.0-2.0*f);\n  float a=hash13(i), b=hash13(i+vec3(1,0,0)), c=hash13(i+vec3(0,1,0)), d=hash13(i+vec3(1,1,0));\n  float e=hash13(i+vec3(0,0,1)), f1=hash13(i+vec3(1,0,1)), g=hash13(i+vec3(0,1,1)), h=hash13(i+vec3(1,1,1));\n  return mix(mix(mix(a,b,u.x),mix(c,d,u.x),u.y), mix(mix(e,f1,u.x),mix(g,h,u.x),u.y), u.z);\n}\nfloat vnoise(vec2 p){\n  vec2 i=floor(p), f=fract(p);\n  vec2 u=f*f*(3.0-2.0*f);\n  return mix(mix(hash12(i),hash12(i+vec2(1,0)),u.x), mix(hash12(i+vec2(0,1)),hash12(i+vec2(1,1)),u.x), u.y);\n}\n// gradient noise (signed, -1..1)\nfloat gnoise(vec3 p){\n  vec3 i=floor(p), f=fract(p);\n  vec3 u=f*f*f*(f*(f*6.0-15.0)+10.0);\n  #define G(o) dot(hash33(i+o)*2.0-1.0, f-o)\n  float r = mix(mix(mix(G(vec3(0,0,0)),G(vec3(1,0,0)),u.x), mix(G(vec3(0,1,0)),G(vec3(1,1,0)),u.x),u.y),\n                mix(mix(G(vec3(0,0,1)),G(vec3(1,0,1)),u.x), mix(G(vec3(0,1,1)),G(vec3(1,1,1)),u.x),u.y),u.z);\n  #undef G\n  return r*1.6;\n}\nfloat gnoise(vec2 p){\n  vec2 i=floor(p), f=fract(p);\n  vec2 u=f*f*f*(f*(f*6.0-15.0)+10.0);\n  #define G(o) dot(hash22(i+o)*2.0-1.0, f-o)\n  float r = mix(mix(G(vec2(0,0)),G(vec2(1,0)),u.x), mix(G(vec2(0,1)),G(vec2(1,1)),u.x), u.y);\n  #undef G\n  return r*1.4;\n}\nfloat fbm(vec3 p, int oct){\n  float s=0., a=0.5;\n  for(int i=0;i<8;i++){ if(i>=oct) break; s+=a*gnoise(p); p=p*2.03+vec3(17.1,-3.7,9.2); a*=0.5; }\n  return s;\n}\nfloat fbm(vec2 p, int oct){\n  float s=0., a=0.5;\n  for(int i=0;i<8;i++){ if(i>=oct) break; s+=a*gnoise(p); p=mat2(1.6,1.2,-1.2,1.6)*p+vec2(3.1,7.7); a*=0.5; }\n  return s;\n}\n\n// Voronoi with true border distance (iq). Returns (border distance, cell id hash, F1)\nvec3 voronoiB(vec3 x){\n  vec3 p=floor(x), f=fract(x);\n  vec3 mb; vec3 mr; float md=8.0;\n  for(int k=-1;k<=1;k++) for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){\n    vec3 b=vec3(i,j,k);\n    vec3 r=b+hash33(p+b)-f;\n    float d=dot(r,r);\n    if(d<md){ md=d; mr=r; mb=b; }\n  }\n  float bd=8.0;\n  for(int k=-1;k<=1;k++) for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){\n    vec3 b=mb+vec3(i,j,k);\n    vec3 r=b+hash33(p+b)-f;\n    vec3 dr=r-mr;\n    if(dot(dr,dr)>1e-5) bd=min(bd, dot(0.5*(mr+r), normalize(dr)));\n  }\n  return vec3(bd, hash13(p+mb+vec3(7.0)), sqrt(md));\n}\nvec3 voronoiB(vec2 x){\n  vec2 p=floor(x), f=fract(x);\n  vec2 mb; vec2 mr; float md=8.0;\n  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){\n    vec2 b=vec2(i,j); vec2 r=b+hash22(p+b)-f; float d=dot(r,r);\n    if(d<md){ md=d; mr=r; mb=b; }\n  }\n  float bd=8.0;\n  for(int j=-2;j<=2;j++) for(int i=-2;i<=2;i++){\n    vec2 b=mb+vec2(i,j); vec2 r=b+hash22(p+b)-f; vec2 dr=r-mr;\n    if(dot(dr,dr)>1e-5) bd=min(bd, dot(0.5*(mr+r), normalize(dr)));\n  }\n  return vec3(bd, hash12(p+mb+vec2(7.0)), sqrt(md));\n}\n\n// ---- SDF helpers\nfloat smin(float a,float b,float k){ float h=max(k-abs(a-b),0.0)/k; return min(a,b)-h*h*k*0.25; }\nfloat smax(float a,float b,float k){ return -smin(-a,-b,k); }\nfloat sdBox(vec3 p, vec3 b){ vec3 q=abs(p)-b; return length(max(q,0.0))+min(max(q.x,max(q.y,q.z)),0.0); }\nfloat sdBox(vec2 p, vec2 b){ vec2 q=abs(p)-b; return length(max(q,0.0))+min(max(q.x,q.y),0.0); }\nfloat sdRBox(vec3 p, vec3 b, float r){ return sdBox(p,b-r)-r; }\nfloat sdCyl(vec3 p, float r, float h){ vec2 d=abs(vec2(length(p.xz),p.y))-vec2(r,h); return min(max(d.x,d.y),0.0)+length(max(d,0.0)); }\nfloat sdSeg(vec2 p, vec2 a, vec2 b){ vec2 pa=p-a, ba=b-a; float h=sat(dot(pa,ba)/dot(ba,ba)); return length(pa-ba*h); }\n\n// ---- camera\nvec3 camRay(vec2 frag){\n  vec2 uv = (2.0*(frag+uJitter)-uRes)/uRes.y;\n  return normalize(uCamRot*vec3(uv*uFov, 1.0));\n}\n\n// ---- colour\nvec3 blackbody(float t){ // t in Kelvin, returns linear rgb (normalised-ish)\n  t = clamp(t, 800.0, 12000.0)/100.0;\n  vec3 c;\n  c.r = t<=66.0 ? 1.0 : 1.292936*pow(t-60.0,-0.1332047592);\n  c.g = t<=66.0 ? 0.3900815*log(t)-0.6318414 : 1.129890*pow(t-60.0,-0.0755148492);\n  c.b = t>=66.0 ? 1.0 : (t<=19.0 ? 0.0 : 0.5432068*log(t-10.0)-1.1962541);\n  return pow(sat(c), vec3(2.2));\n}\nfloat luma(vec3 c){ return dot(c, vec3(0.2126,0.7152,0.0722)); }\n\n// ---- BRDF\nfloat D_GGX(float nh, float a){ float a2=a*a; float d=nh*nh*(a2-1.0)+1.0; return a2/(PI*d*d); }\nfloat V_SmithJ(float nv, float nl, float a){ float a2=a*a;\n  float gv=nl*sqrt(nv*nv*(1.0-a2)+a2), gl=nv*sqrt(nl*nl*(1.0-a2)+a2); return 0.5/max(gv+gl,1e-5); }\nvec3  F_Schlick(vec3 f0, float vh){ return f0+(1.0-f0)*pow(1.0-vh,5.0); }\nfloat F_Schlick1(float f0, float vh){ return f0+(1.0-f0)*pow(1.0-vh,5.0); }\n// returns specular (already multiplied by nl)\nvec3 specGGX(vec3 n, vec3 v, vec3 l, float rough, vec3 f0){\n  vec3 h=normalize(v+l);\n  float nl=sat(dot(n,l)), nv=max(dot(n,v),1e-4), nh=sat(dot(n,h)), vh=sat(dot(v,h));\n  float a=max(rough*rough,0.002);\n  return D_GGX(nh,a)*V_SmithJ(nv,nl,a)*F_Schlick(f0,vh)*nl;\n}\n// analytic env-BRDF approximation (Karis)\nvec2 envBRDF(float nv, float rough){\n  vec4 c0=vec4(-1,-0.0275,-0.572,0.022), c1=vec4(1,0.0425,1.04,-0.04);\n  vec4 r=rough*c0+c1; float a004=min(r.x*r.x,exp2(-9.28*nv))*r.x+r.y;\n  return vec2(-1.04,1.04)*a004+r.zw;\n}\n\n// ---------------------------------------------------------------- bowl\n// Units: 1.0 = 10 cm. Bowl local space: foot rests on y=0, axis is +y.\n#define NPROF 16\nuniform vec4  uProf[NPROF];   // centerline (r, y), half thickness, unused\nuniform vec4  uFoot;          // foot ring stroke: r0,y0,r1,y1\nuniform float uFootTh;        // foot half thickness (0 = none)\nuniform float uWobble;        // rim wobble amplitude\nuniform float uOval;          // ovality\nuniform float uRidge;         // throwing ridge amplitude\nuniform float uSpin;          // wheel angle (radians), rotates surface detail\n\n// material state\nuniform float uWet;       // 1 = wet thrown clay\nuniform float uDry;       // 0..1 wet->leather->bone dry\nuniform float uGlazeRaw;  // raw glaze slip coverage (matte)\nuniform float uMelt;      // glaze melted (glossy)\nuniform float uHeat;      // incandescence 0..1\nuniform float uAsh;       // natural ash deposit\nuniform float uCrackle;   // crackle network visibility\nuniform float uStain;     // tea stain in crackle\nuniform float uGold;      // kintsugi seams\nuniform float uTeaLevel;  // tea fill 0..1 (0 = empty)\nuniform float uFroth;     // matcha froth amount\n\n// fracture / seam network\n#define NSEED 14\nuniform vec4 uSeeds[NSEED]; // xyz seed on bowl surface (local), w unused\n\nstruct BowlHit { float d; float side; float s; vec2 nDelta; };\n\nvec2 segPerp(int i){ vec2 b=normalize(uProf[i+1].xy-uProf[i].xy); return vec2(-b.y, b.x); }\n\n// distance-only version for marching\nfloat bowlProfileD(vec2 q){\n  float d = 1e5;\n  for(int i=0;i<NPROF-1;i++){\n    vec2 a=uProf[i].xy, ba=uProf[i+1].xy-a, pa=q-a;\n    float t=sat(dot(pa,ba)/dot(ba,ba));\n    d=min(d, length(pa-ba*t)-mix(uProf[i].z, uProf[i+1].z, t));\n  }\n  return d;\n}\n\n// full version: side (+1 inside the cavity, -1 outside), arc parameter, and the\n// correction that turns faceted polyline normals into smooth (Phong-like) ones\nBowlHit bowlProfile(vec2 q){\n  BowlHit h; h.d = 1e5; h.side = 0.0; h.s = 0.0; h.nDelta=vec2(0);\n  float acc = 0.0, total = 0.0;\n  for(int i=0;i<NPROF-1;i++) total += length(uProf[i+1].xy-uProf[i].xy);\n  int bi=0; float bt=0.0;\n  for(int i=0;i<NPROF-1;i++){\n    vec2 a=uProf[i].xy, b=uProf[i+1].xy;\n    vec2 pa=q-a, ba=b-a;\n    float L = length(ba);\n    float t=sat(dot(pa,ba)/(L*L));\n    float th=mix(uProf[i].z, uProf[i+1].z, t);\n    float d=length(pa-ba*t)-th;\n    if(d<h.d){ h.d=d; h.side = (pa.x*ba.y-pa.y*ba.x) < 0.0 ? 1.0 : -1.0; h.s=(acc+t*L)/total; bi=i; bt=t; }\n    acc += L;\n  }\n  if(bt>0.0 && bt<1.0){\n    vec2 pf = segPerp(bi);\n    vec2 n0 = bi>0 ? normalize(segPerp(bi-1)+pf) : pf;\n    vec2 n1 = bi<NPROF-2 ? normalize(segPerp(bi+1)+pf) : pf;\n    vec2 ns = normalize(mix(n0,n1,bt));\n    h.nDelta = (ns-pf)*h.side;\n  }\n  return h;\n}\n\nvec2 bowlQ(vec3 p){\n  float a = atan(p.z,p.x);\n  float r = length(p.xz);\n  r *= 1.0 + uOval*cos(2.0*a-1.4);\n  float rim = smoothstep(0.25,0.75,p.y);\n  float y = p.y - uWobble*rim*(0.55*sin(a*2.0+1.3)+0.3*sin(a*5.0+4.0)+0.15*sin(a*9.0+0.5));\n  return vec2(r, y);\n}\n\nfloat sdBowl(vec3 p){\n  vec2 q = bowlQ(p);\n  float d = bowlProfileD(q);\n  if(uFootTh>0.0){\n    float th = uFootTh;\n    float df = sdSeg(q, uFoot.xy, uFoot.zw) - th;\n    d = smin(d, df, 0.03);\n  }\n  // throwing ridges (spiral rings)\n  d -= uRidge*sin(q.y*70.0 + 0.6*sin(q.y*9.0))*smoothstep(0.02,0.1,q.y);\n  return d;\n}\n\n// full info at a surface point (called once per hit)\nBowlHit bowlInfo(vec3 p){\n  vec2 q = bowlQ(p);\n  BowlHit h = bowlProfile(q);\n  if(uFootTh>0.0){\n    float df = sdSeg(q, uFoot.xy, uFoot.zw) - uFootTh;\n    if(df < h.d + 0.012){ h.side = -2.0; h.nDelta = vec2(0); } // foot ring: unglazed\n  }\n  return h;\n}\n\n// Warped Voronoi on the fixed fracture seeds. Returns (border distance, cell index, second index)\nvec3 seamField(vec3 p){\n  vec3 w = p + 0.035*vec3(gnoise(p*9.0), gnoise(p*9.0+11.0), gnoise(p*9.0+23.0))\n             + 0.012*vec3(gnoise(p*31.0), gnoise(p*31.0+5.0), gnoise(p*31.0+9.0));\n  float d1=1e5, d2=1e5; int i1=0, i2=0;\n  for(int i=0;i<NSEED;i++){\n    vec3 r = w-uSeeds[i].xyz;\n    float d = dot(r,r);\n    if(d<d1){ d2=d1; i2=i1; d1=d; i1=i; } else if(d<d2){ d2=d; i2=i; }\n  }\n  vec3 s1=uSeeds[i1].xyz, s2=uSeeds[i2].xyz;\n  float bd = (d2-d1)/(2.0*length(s2-s1));\n  return vec3(bd, float(i1), float(i2));\n}\n\n// glaze thickness 0..~2 on the surface\nfloat glazeThickness(vec3 p, BowlHit h){\n  float a = atan(p.z,p.x);\n  if(h.side < -1.5) return 0.0;              // foot\n  float s = h.s;\n  float t;\n  if(h.side > 0.0){\n    // interior: pools in the well\n    t = 0.75 + 1.1*smoothstep(0.42,0.05,s) ;\n    t *= 0.35+0.65*smoothstep(1.0,0.9,s);     // thins over the rim\n  } else {\n    // exterior: glaze line with drips\n    float line = 0.46 + 0.04*gnoise(vec2(a*2.0,1.7));\n    float drip = pow(sat(gnoise(vec2(a*7.0, 3.1))*0.5+0.5), 5.0)*0.28\n               + pow(sat(gnoise(vec2(a*19.0, 8.3))*0.5+0.5), 8.0)*0.18;\n    float edge = line - drip;\n    float cov = smoothstep(edge-0.004, edge+0.01, s);\n    // thick roll at the drip end, thinning toward the rim\n    t = cov*(0.7 + 1.1*exp(-max(s-edge,0.0)*28.0));\n    t *= 0.35+0.65*smoothstep(1.0,0.9,s);\n  }\n  // natural ash: heavier on one flank (facing the fire)\n  float ashSide = sat(0.5+0.5*cos(a-2.4))*smoothstep(0.35,0.85,s);\n  t += uAsh*ashSide*(0.6+0.8*sat(gnoise(p*14.0)+0.3));\n  return t;\n}\n\n// ---------------------------------------------------------------- bowl material\nstruct Surf {\n  vec3 alb;      // diffuse albedo (base, under coat)\n  vec3 f0;       // base specular reflectance (metals)\n  float rough;   // base roughness\n  float coat;    // clear coat (glaze / water film) strength 0..1\n  float coatRough;\n  vec3 n;        // base normal\n  vec3 cn;       // coat normal\n  vec3 emit;\n  float sss;     // wrap / translucency amount\n};\n\nSurf defaultSurf(vec3 n){\n  Surf s; s.alb=vec3(0.5); s.f0=vec3(0.04); s.rough=0.8; s.coat=0.0; s.coatRough=0.1;\n  s.n=n; s.cn=n; s.emit=vec3(0); s.sss=0.0; return s;\n}\n\nvec3 rotYv(vec3 p, float a){ float c=cos(a), s=sin(a); return vec3(c*p.x-s*p.z, p.y, s*p.x+c*p.z); }\n\n// perturb normal with a scalar height function's numerical gradient projected on the surface\n#define BUMP(n, P, F, EPS, AMT) { \\\n  vec3 _e=vec3(EPS,0,0); float _h0=F(P); \\\n  vec3 _g=vec3(F(P+_e.xyy)-_h0, F(P+_e.yxy)-_h0, F(P+_e.yyx)-_h0)/EPS; \\\n  _g-=n*dot(_g,n); n=normalize(n-AMT*_g); }\n\nfloat clayGrain(vec3 p){ return gnoise(p*140.0)*0.5+gnoise(p*330.0)*0.25; }\nfloat glazeRipple(vec3 p){ return gnoise(p*22.0)+0.35*gnoise(p*61.0); }\n\nSurf bowlSurface(vec3 p, vec3 n, vec3 v){\n  Surf s = defaultSurf(n);\n  BowlHit h = bowlInfo(p);\n  { vec2 dr = normalize(p.xz+1e-6); n = normalize(n + vec3(dr.x*h.nDelta.x, h.nDelta.y, dr.y*h.nDelta.x)); s.n=n; s.cn=n; }\n  vec3 pr = rotYv(p, uSpin);            // detail rotating with the wheel\n  float a = atan(pr.z, pr.x);\n\n  // ---------- clay body\n  float speck = smoothstep(0.86, 0.95, vnoise(pr*80.0)) * 0.7;\n  float grain = clayGrain(pr);\n  vec3 fired = vec3(0.50,0.44,0.37)*(0.92+0.1*grain);\n  fired = mix(fired, vec3(0.18,0.09,0.05), speck);\n  // flashing on the unglazed foot / exposed body\n  float flash = sat(0.5+0.8*gnoise(pr*4.0+3.0));\n  vec3 footCol = mix(fired, vec3(0.58,0.30,0.14), 0.55*flash);\n\n  // unfired clay (wet -> dry)\n  vec3 wetCol = vec3(0.19,0.10,0.065);\n  vec3 dryCol = vec3(0.60,0.53,0.46)*(0.95+0.08*grain);\n  vec3 raw = mix(wetCol, dryCol, smoothstep(0.0,1.0,uDry));\n  float slurry = sat(0.5+0.9*gnoise(vec3(a*6.0, pr.y*38.0, 0.0)));\n\n  float firedAmt = max(uMelt, uHeat);\n  vec3 body = mix(raw, h.side<-1.5 ? footCol : fired, sat(firedAmt*1.5));\n  s.alb = body;\n  s.rough = 0.85;\n  BUMP(s.n, pr, clayGrain, 0.002, 0.00025);\n\n  // ---------- wet film\n  if(uWet>0.0){\n    float film = uWet*(0.55+0.45*slurry);\n    s.coat = film;\n    s.coatRough = mix(0.32, 0.12, slurry);\n    s.alb = mix(s.alb, s.alb*0.7, film);\n    s.cn = n;\n    // throwing lines in the film\n    vec3 nn = n;\n    float lines = sin(p.y*140.0+2.0*gnoise(vec3(a*3.0,p.y*10.0,0.0)));\n    nn = normalize(nn + 0.08*uWet*lines*vec3(0,1,0));\n    s.cn = nn;\n  }\n\n  // ---------- glaze\n  float t = glazeThickness(p, h);\n  float cov = sat(t*4.0);\n  if(cov>0.0){\n    // raw slip (unfired glaze powder)\n    vec3 slip = vec3(0.70,0.72,0.70)*(0.95+0.08*grain);\n    float rawAmt = uGlazeRaw*(1.0-uMelt);\n    // melted celadon: Beer-Lambert over the body + milky scatter\n    vec3 sigma = vec3(0.62,0.26,0.33);\n    float tt = t*(1.0+0.15*gnoise(p*7.0));\n    vec3 trans = exp(-sigma*tt*1.6);\n    vec3 milk = vec3(0.55,0.72,0.66);\n    float scat = 1.0-exp(-tt*0.9);\n    vec3 glazeCol = mix(body*trans*1.15, milk*mix(vec3(1.0),trans,0.5), scat*0.72);\n    // ash: greener glassy runs\n    glazeCol = mix(glazeCol, vec3(0.30,0.42,0.22)*trans*1.4, sat(uAsh*(t-0.9)*0.9));\n    // iron specks bleed through\n    glazeCol = mix(glazeCol, vec3(0.22,0.13,0.07), speck*0.5*exp(-tt*1.2));\n\n    // crackle network (two scales, only in glaze)\n    float crk = 0.0;\n    if(uCrackle>0.0){\n      vec3 wp = p + 0.02*vec3(gnoise(p*13.0), gnoise(p*13.0+7.0), gnoise(p*13.0+3.0));\n      vec3 c1 = voronoiB(wp*vec3(5.5,7.0,5.5)+vec3(3.0));\n      vec3 c2 = voronoiB(wp*15.0+vec3(1.3));\n      float l1 = 1.0-smoothstep(0.004, 0.016, c1.x);\n      float l2 = (1.0-smoothstep(0.004, 0.02, c2.x))*0.45;\n      float reveal = smoothstep(c1.y*0.8, c1.y*0.8+0.2, uCrackle);\n      crk = max(l1*reveal, l2*smoothstep(0.4,1.0,uCrackle)*step(0.55,c2.y));\n      crk *= 0.55+0.45*sat(gnoise(p*5.0)+0.5);\n      vec3 crackCol = mix(glazeCol*1.18+0.03, vec3(0.28,0.16,0.07), uStain*(h.side>0.0?1.0:0.6));\n      glazeCol = mix(glazeCol, crackCol, crk*0.8);\n    }\n\n    vec3 glazed = glazeCol;\n    s.alb = mix(s.alb, mix(glazed, slip, rawAmt), cov);\n    s.rough = mix(s.rough, 0.9, cov*rawAmt);\n    // melted glaze is a clear coat\n    float coat = cov*uMelt;\n    s.coat = max(s.coat, coat);\n    s.coatRough = mix(s.coatRough, 0.045, coat);\n    vec3 cn = n;\n    BUMP(cn, p, glazeRipple, 0.004, 0.0012*uMelt);\n    s.cn = normalize(mix(s.cn, cn, coat));\n    s.sss = 0.35*coat*scat;\n  }\n\n  // ---------- tea stain on the unglazed foot over years\n  s.alb *= 1.0 - 0.15*uStain*step(h.side,-1.5);\n\n  // ---------- incandescence\n  if(uHeat>0.0){\n    float T = mix(850.0, 1560.0, uHeat);\n    s.emit = blackbody(T)*pow(uHeat,2.2)*6.0*(0.85+0.15*grain);\n  }\n\n  // ---------- kintsugi gold\n  if(uGold>0.0){\n    vec3 sf = seamField(p);\n    float w = 0.0075*(0.75+0.5*sat(gnoise(p*6.0)*0.5+0.5));\n    float g = 1.0-smoothstep(w*0.75, w, sf.x);\n    g *= uGold;\n    if(g>0.0){\n      vec3 e = normalize(uSeeds[int(sf.z)].xyz-uSeeds[int(sf.y)].xyz);\n      float x = sat(sf.x/w);\n      float slope = -0.9*x/sqrt(max(1.0-x*x,0.02));\n      vec3 et = normalize(e - n*dot(e,n));\n      vec3 gn = normalize(n + slope*et*0.6);\n      float burnish = sat(0.5+0.8*gnoise(p*40.0));\n      s.alb = mix(s.alb, vec3(0.0), g);\n      s.f0 = mix(s.f0, vec3(1.0,0.74,0.32), g);\n      s.rough = mix(s.rough, mix(0.34,0.14,burnish), g);\n      s.coat = mix(s.coat, 0.0, g);\n      s.n = normalize(mix(s.n, gn, g));\n      s.cn = s.n;\n    }\n  }\n  return s;\n}\n\n// ---------------------------------------------------------------- the room\n// A low table by a shoji wall. Every visual parameter lives in a Mem struct so\n// the same room can be traced \"now\" (Life scene) or at any remembered moment\n// (the shard portals).\n//\n// Room coordinates (units 10cm): table top y=0, bowl at origin.\n// Shoji wall is the plane z = WALLZ, facing -z. Floor at y = FLOORY.\n#define WALLZ 7.0\n#define FLOORY -3.3\n#define TABLE_HX 6.0\n#define TABLE_HZ 4.2\n\nstruct Mem {\n  float day;      // 0..1  (0.25 sunrise, 0.5 noon, 0.75 sunset)\n  float season;   // 0 spring, 1 summer, 2 autumn, 3 winter (continuous)\n  float two;      // second bowl presence 0..1\n  float gap;      // distance between the bowls (bowl-centre spacing)\n  float candle;   // candle light 0..1\n  float steam;    // steam amount 0..1\n  float tea;      // tea level 0..1 in the celadon bowl\n  float tea2;     // tea in the tenmoku\n  float open;     // shoji panel open 0..1\n  float ring;     // faint ring left where the second bowl stood\n  float bowlOn;   // celadon bowl present on table (0 while lifted/fallen)\n  vec3  bowlOff;  // offset of the celadon bowl (lift)\n  float bowlTilt; // tilt of the celadon bowl\n};\n\nuniform vec4 uProf2[6]; // tenmoku profile\n\n// ---- second bowl: tenmoku (conical, dark iron glaze), analytic 6-point lathe\nfloat sdTenmoku(vec3 p){\n  vec2 q = vec2(length(p.xz), p.y);\n  float d = 1e5;\n  for(int i=0;i<5;i++){\n    vec2 a=uProf2[i].xy, ba=uProf2[i+1].xy-a, pa=q-a;\n    float t=sat(dot(pa,ba)/dot(ba,ba));\n    d=min(d, length(pa-ba*t)-mix(uProf2[i].z, uProf2[i+1].z, t));\n  }\n  // foot\n  d = smin(d, sdSeg(q, vec2(0.17,0.07), vec2(0.18,0.025))-0.022, 0.02);\n  return d;\n}\n\nvec3 sunDir(Mem m){\n  // sun travels across the sky beyond the shoji (+z), lower in winter\n  float a = (m.day-0.25)*PI;            // 0 at sunrise, PI at sunset\n  float elev = mix(0.95, 0.5, sat(abs(m.season-1.0)/2.0)) ;\n  vec3 d = vec3(-cos(a)*0.9, sin(a)*elev, 1.0);\n  return normalize(d);\n}\nfloat sunUp(Mem m){ return smoothstep(0.2,0.3,m.day)*smoothstep(0.8,0.7,m.day); }\nvec3 sunColor(Mem m){\n  float h = sunDir(m).y;\n  vec3 c = mix(vec3(1.0,0.45,0.16), vec3(1.0,0.86,0.68), smoothstep(0.05,0.45,h));\n  c *= mix(1.0, 0.8, smoothstep(2.5,3.0,m.season)); // pale winter\n  return c*6.0*sunUp(m);\n}\nvec3 skyColor(Mem m, float up){\n  float d = sunUp(m);\n  vec3 night = vec3(0.012,0.016,0.03);\n  vec3 dayc = mix(vec3(0.45,0.58,0.8), vec3(0.62,0.66,0.72), smoothstep(2.4,3.0,m.season));\n  vec3 c = mix(night, dayc*(0.6+0.4*up), d);\n  float dusk = sat(1.0-abs(m.day-0.25)*12.0)+sat(1.0-abs(m.day-0.75)*12.0);\n  c = mix(c, vec3(0.9,0.5,0.3)*0.8, dusk*0.5*(1.0-up));\n  return c;\n}\n\n// shoji lattice: 1 on paper, 0 on wood bars. uv in wall coords (x, y)\nfloat shojiPaper(vec2 w){\n  vec2 cell = vec2(1.9, 2.3);\n  vec2 f = abs(fract(w/cell+0.5)-0.5)*cell;\n  float bar = min(f.x, f.y);\n  return smoothstep(0.07, 0.1, bar);\n}\n// open panel: a slid-open gap in the shoji (x from -1.2 widening to the right)\nfloat openPanel(vec2 w, Mem m){\n  float x0 = -1.2, x1 = x0 + m.open*4.0;\n  return step(x0,w.x)*step(w.x,x1)*step(-1.0,w.y)*step(w.y,14.0);\n}\n// light transmitted through the wall toward direction L from point p\n// returns (direct sun fraction through the gap, diffuse paper glow factor)\nvec2 wallTransmit(vec3 p, vec3 L, Mem m){\n  if(L.z<=0.01) return vec2(0);\n  float t = (WALLZ-p.z)/L.z;\n  vec2 w = (p+L*t).xy;\n  if(w.y<-1.0 || w.y>14.0) return vec2(0);\n  // soft penumbra on the gap edges (sun is not a point, the gap is 30cm away)\n  float x0 = -1.2, x1 = x0 + m.open*4.0;\n  float pen = 0.05 + 0.012*t;\n  float open = smoothstep(x0-pen, x0+pen, w.x)*smoothstep(x1+pen, x1-pen, w.x)*smoothstep(-1.0,-0.6,w.y);\n  return vec2(open, 1.0-open);\n}\n\n// garden through the gap: an out-of-focus impression (DOF will blur it more)\nvec3 garden(vec3 ro, vec3 rd, Mem m){\n  vec3 sky = skyColor(m, rd.y);\n  float t = (WALLZ+40.0-ro.z)/max(rd.z,1e-3);\n  vec2 g = (ro+rd*t).xy*0.05;\n  float s = m.season;\n  vec3 spring = vec3(1.0,0.66,0.74), summer = vec3(0.16,0.32,0.10), autumn = vec3(0.9,0.26,0.06), winter = vec3(0.35,0.32,0.3);\n  vec3 leaf = s<1.0 ? mix(spring,summer,smoothstep(0.3,1.0,s)) : s<2.0 ? mix(summer,autumn,smoothstep(1.3,2.0,s)) : mix(autumn,winter,smoothstep(2.1,2.6,s));\n  float bare = smoothstep(2.2,2.7,s);\n  vec3 sunc = sunColor(m);\n  vec3 lit = sunc*0.1 + skyColor(m,1.0)*0.45;\n  // foliage mass: soft, low frequency\n  float mass = fbm(g*vec2(1.2,1.6)+vec2(1.7,0.3), 4)*0.9 + 0.25 - 0.35*g.y;\n  float leafy = smoothstep(-0.05,0.25,mass)*(1.0-0.85*bare);\n  vec3 col = mix(sky, leaf*lit*(0.55+0.6*sat(fbm(g*5.0,3)+0.5)), leafy);\n  // sun sparkles through the canopy (become bokeh discs)\n  vec3 v = voronoiB(g*14.0);\n  float spark = smoothstep(0.25,0.05,v.z)*step(0.82,v.y)*leafy*sunUp(m);\n  col += sunc*0.25*spark*mix(vec3(1.0), leaf+0.3, 0.5);\n  // winter: snow on the ground and bare dark branches\n  float branches = (1.0-smoothstep(0.0,0.06,abs(fbm(g*vec2(2.0,1.0)+3.0,4))))*smoothstep(0.8,0.0,g.y)*bare;\n  col = mix(col, vec3(0.02)*lit, branches*0.8);\n  float ground = smoothstep(-0.28,-0.4,g.y+0.05*fbm(g*6.0,2));\n  vec3 gcol = mix(vec3(0.06,0.09,0.04), vec3(0.85,0.88,0.93), smoothstep(2.6,2.9,s));\n  col = mix(col, gcol*(lit+0.02), ground);\n  return col;\n}\n\n// -------- geometry\n// ids: 1 bowl, 2 tenmoku, 3 table, 4 wall, 5 floor, 6 tea surface, 7 candle\nvec3 bowlLocal(vec3 p, Mem m){\n  vec3 q = p - m.bowlOff;\n  q.xy = rot(m.bowlTilt)*q.xy;\n  return q;\n}\nvec3 tenLocal(vec3 p, Mem m){ return p - vec3(-m.gap*0.95, 0.0, m.gap*0.3); }\nvec3 candlePos(){ return vec3(2.6, 0.0, 1.6); }\n\nvec2 roomMap(vec3 p, Mem m){\n  vec2 r = vec2(1e5, 0.0);\n  // table top slab (only its top face and edges matter)\n  float tb = sdRBox(p-vec3(0.0,-0.25,0.0), vec3(TABLE_HX,0.25,TABLE_HZ), 0.04);\n  r = vec2(tb, 3.0);\n  if(m.bowlOn>0.5){\n    vec3 q = bowlLocal(p,m);\n    float bb = length(q-vec3(0,0.35,0))-0.75;\n    float b = bb>0.1 ? bb : sdBowl(q);\n    if(b<r.x) r=vec2(b,1.0);\n  }\n  if(m.two>0.01){\n    vec3 q = tenLocal(p,m);\n    q.y += (1.0-m.two)*8.0;    // absent bowls are far below the table\n    float bb = length(q-vec3(0,0.3,0))-0.7;\n    float b = bb>0.1 ? bb : sdTenmoku(q);\n    if(b<r.x) r=vec2(b,2.0);\n  }\n  // candle (short, in a clay dish)\n  if(m.candle>0.01){\n    vec3 q = p-candlePos();\n    float c = sdCyl(q-vec3(0,0.4,0), 0.22, 0.4);\n    c = min(c, sdCyl(q-vec3(0,0.04,0), 0.42, 0.04));\n    if(c<r.x) r=vec2(c,7.0);\n  }\n  // wall and floor\n  float w = WALLZ + 0.02 - p.z;\n  if(w<r.x) r=vec2(w,4.0);\n  float f = p.y-FLOORY;\n  if(f<r.x) r=vec2(f,5.0);\n  return r;\n}\n\nvec3 roomNormal(vec3 p, Mem m){\n  const vec2 e=vec2(0.0008,-0.0008);\n  return normalize(e.xyy*roomMap(p+e.xyy,m).x+e.yyx*roomMap(p+e.yyx,m).x+e.yxy*roomMap(p+e.yxy,m).x+e.xxx*roomMap(p+e.xxx,m).x);\n}\n\nfloat roomShadow(vec3 ro, vec3 rd, Mem m, float k){\n  float res=1.0, t=0.01;\n  for(int i=0;i<40;i++){\n    vec3 p = ro+rd*t;\n    if(p.y>1.5 || p.z>WALLZ-0.1) break;\n    float h=roomMap(p,m).x;\n    res=min(res, k*h/t);\n    t+=clamp(h,0.01,0.25);\n    if(res<0.002) break;\n  }\n  return sat(res);\n}\n\n// radiance of the shoji wall itself (glowing paper; the gap shows the garden)\nvec3 wallRadianceR(vec3 p, vec3 rd, Mem m, float rough){\n  vec2 w = p.xy;\n  vec3 L = sunDir(m);\n  vec3 sunc = sunColor(m);\n  float paper = mix(shojiPaper(w), 0.8, sat(rough*6.0));\n  vec3 glow = (skyColor(m,0.7)*1.1 + sunc*0.10*sat(L.z))*vec3(1.0,0.95,0.86);\n  // the sun's disc seen through paper: broad warm hot-spot\n  vec2 sp = vec2(p.x - L.x/L.z*6.0, p.y - 2.0 + L.y*4.0);\n  glow *= 1.0 + 1.1*sunUp(m)*exp(-dot(sp,sp)*0.02);\n  glow *= 0.9+0.1*fbm(w*2.5,3);\n  vec3 wood = vec3(0.045,0.03,0.02)*(skyColor(m,0.5)*0.5 + 0.02);\n  vec3 col = mix(wood, glow, paper);\n  float open = openPanel(w, m);\n  if(open>0.5) col = garden(p, rd, m);\n  // plaster below the shoji, lintel above\n  if(w.y<-1.0 || w.y>14.0) col = vec3(0.30,0.26,0.21)*(skyColor(m,0.2)*0.15+0.004);\n  return col;\n}\nvec3 wallRadiance(vec3 p, vec3 rd, Mem m){ return wallRadianceR(p, rd, m, 0.0); }\n\n// irradiance estimate inside the room: the shoji is a big soft area light\nvec3 roomAmbient(vec3 p, vec3 n, Mem m){\n  vec3 sky = skyColor(m, 0.7);\n  float toWall = sat(n.z*0.6+0.4);\n  float near = 1.0/(1.0+0.02*sq(WALLZ-p.z));\n  vec3 a = sky*(0.03 + 0.55*toWall*toWall*near)*(0.7+0.3*sat(n.y));\n  // warm bounce from the room behind the camera (sunlit tatami, plaster)\n  a += (sky*0.06 + sunColor(m)*0.012)*vec3(1.0,0.85,0.7)*sat(-n.z*0.7+0.3);\n  a += sunColor(m)*0.015*sat(-n.y*0.5+0.5)*0.5;  // bounce from sunlit floor\n  return a;\n}\n\nvec3 candleLight(vec3 p, vec3 n, Mem m, out vec3 L){\n  vec3 fl = candlePos()+vec3(0.0,1.05,0.0);\n  vec3 d = fl-p; float r2 = dot(d,d); L = d*inversesqrt(r2);\n  float flick = 0.85+0.15*sin(uTime*23.0)*sin(uTime*7.3+1.0);\n  return vec3(1.0,0.55,0.22)*m.candle*flick*3.0/(r2+0.5);\n}\n\nvec3 woodTable(vec3 p){\n  vec2 u = p.xz;\n  float warp = fbm(u*vec2(0.18,0.9),3);\n  float ring = fract((u.y+warp*1.8)*1.6 + 0.3*fbm(u*vec2(0.06,0.5),2));\n  float grain = smoothstep(0.0,0.3,ring)*smoothstep(1.0,0.55,ring);\n  vec3 c = mix(vec3(0.075,0.042,0.024), vec3(0.15,0.085,0.045), grain);\n  c *= 0.8+0.3*sat(fbm(u*vec2(0.5,14.0),3)+0.5);\n  return c;\n}\n\n// inner radius of the celadon bowl at height y (for the tea surface)\nfloat teaRadius(float y){\n  for(int i=0;i<NPROF-1;i++){\n    vec4 a=uProf[i], b=uProf[i+1];\n    if(y>=a.y && y<b.y){ float t=(y-a.y)/max(b.y-a.y,1e-4); return mix(a.x,b.x,t)-mix(a.z,b.z,t)*1.1; }\n  }\n  return 0.0;\n}\nfloat teaHeight(float lvl){ return mix(0.16, 0.56, lvl); }\n\n// cheap reflection lookup: shoji wall / table / dark room, no occlusion\nvec3 roomReflect(vec3 p, vec3 r, float rough, Mem m){\n  vec3 c = vec3(0.0);\n  if(r.z>0.05){\n    float t=(WALLZ-p.z)/r.z; vec3 w=p+r*t;\n    if(w.y>FLOORY && w.y<16.0) c = wallRadianceR(w, r, m, rough);\n    else c = skyColor(m,0.3)*0.05;\n  } else if(r.y<-0.05){\n    float t=-p.y/r.y; vec3 w=p+r*t;\n    vec2 tr = wallTransmit(w, sunDir(m), m);\n    c = woodTable(w)*(sunColor(m)*tr.x*sat(sunDir(m).y) + roomAmbient(w, vec3(0,1,0), m));\n  } else {\n    c = roomAmbient(p, -r, m)*0.25;\n  }\n  // blur toward average as roughness grows\n  return mix(c, roomAmbient(p, r, m)*0.8, sat(rough*3.5));\n}\n\nvec3 roomLightSurf(Surf s, vec3 p, vec3 v, Mem m, float ao){\n  vec3 L = sunDir(m);\n  vec3 sc = sunColor(m);\n  vec2 tr = wallTransmit(p, L, m);\n  float sh = 1.0;\n  if(tr.x>0.0 && sunUp(m)>0.0) sh = roomShadow(p+s.n*0.004, L, m, 12.0);\n  vec3 direct = sc*tr.x*sh;\n  float nl = sat(dot(s.n,L));\n  float nv = sat(dot(s.cn,v));\n  float Fc = s.coat*F_Schlick1(0.04, nv);\n  vec3 amb = roomAmbient(p, s.n, m)*ao;\n  vec3 Lc; vec3 cl = candleLight(p, s.n, m, Lc);\n  vec3 dif = s.alb*(1.0-Fc)*(direct*nl + amb + cl*sat(dot(s.n,Lc)) + s.sss*direct*sat(dot(-s.n,L)*0.5+0.4)*0.4);\n  vec3 spec = specGGX(s.n, v, L, s.rough, s.f0)*direct + specGGX(s.n, v, Lc, s.rough, s.f0)*cl;\n  vec2 eb = envBRDF(sat(dot(s.n,v)), s.rough);\n  spec += roomReflect(p, reflect(-v,s.n), s.rough, m)*(s.f0*eb.x+eb.y)*ao;\n  vec3 coat = vec3(0);\n  if(s.coat>0.0){\n    coat = s.coat*(specGGX(s.cn, v, L, s.coatRough, vec3(0.04))*direct\n                  + specGGX(s.cn, v, Lc, s.coatRough, vec3(0.04))*cl\n                  + roomReflect(p, reflect(-v,s.cn), s.coatRough, m)*F_Schlick1(0.04,nv)*ao);\n  }\n  return dif + spec + coat + s.emit;\n}\n\nfloat roomAO(vec3 p, vec3 n, Mem m){\n  float o=0.0, sc=1.0;\n  for(int i=1;i<=4;i++){ float h=0.03*float(i*i); o+=(h-roomMap(p+n*h,m).x)*sc; sc*=0.65; }\n  return sat(1.0-1.6*o);\n}\n\nSurf tenmokuSurface(vec3 q, vec3 n){\n  Surf s = defaultSurf(n);\n  float y = q.y;\n  // iron glaze: black-brown with rust breaking at the rim, \"hare's fur\" streaks\n  float a = atan(q.z,q.x);\n  float fur = sat(0.5+0.7*gnoise(vec3(a*90.0+3.0*gnoise(q*6.0), y*2.0, 0.0)))*0.8;\n  vec3 black = vec3(0.018,0.012,0.009);\n  vec3 rust = vec3(0.30,0.12,0.04);\n  vec3 c = mix(black, rust, sat(fur*smoothstep(0.3,0.62,y)*0.55 + 0.8*smoothstep(0.56,0.63,y)));\n  float foot = step(y,0.1)*step(length(q.xz),0.24);\n  c = mix(c, vec3(0.42,0.3,0.2), foot + smoothstep(0.14,0.1,y));\n  s.alb = c; s.rough=0.7;\n  s.coat = 1.0-foot; s.coatRough = 0.035;\n  return s;\n}\n\n// shade tea surface (matcha)\nvec3 teaShade(vec3 p, vec3 v, Mem m, float froth){\n  vec3 n = vec3(0,1,0);\n  vec2 u = p.xz;\n  float bub = voronoiB(vec3(u*55.0, 1.0)).z;\n  float foam = sat(froth*(0.6+0.6*fbm(u*9.0,3)));\n  vec3 base = mix(vec3(0.10,0.17,0.02), vec3(0.42,0.58,0.16), foam);\n  base *= 0.9+0.2*smoothstep(0.2,0.6,bub);\n  Surf s = defaultSurf(n);\n  s.alb = base; s.rough=0.5; s.coat = 1.0-foam*0.8; s.coatRough = 0.06;\n  s.n = normalize(n + vec3(gnoise(vec3(u*30.0,0.0)),0.0,gnoise(vec3(u*30.0,3.0)))*0.03*foam);\n  s.cn = n;\n  return roomLightSurf(s, p, v, m, 1.0);\n}\n\n// steam: a few noisy wisps rising from a point, integrated front to back\nvec4 steamVolume(vec3 ro, vec3 rd, float tmax, vec3 base, float amt, Mem m){\n  if(amt<0.01) return vec4(0);\n  // bounding cylinder r=0.55 around base, y in [base.y, base.y+4]\n  vec3 oc = ro-base;\n  float a=dot(rd.xz,rd.xz), b=dot(oc.xz,rd.xz), c=dot(oc.xz,oc.xz)-0.55*0.55;\n  float h=b*b-a*c; if(h<0.0) return vec4(0);\n  h=sqrt(h); float t0=max((-b-h)/a,0.0), t1=min((-b+h)/a,tmax);\n  if(t1<=t0) return vec4(0);\n  vec4 acc=vec4(0);\n  float dt=(t1-t0)/14.0;\n  float t=t0+dt*ign(gl_FragCoord.xy);\n  vec3 sc = sunColor(m)*0.5+roomAmbient(base, vec3(0,1,0), m)*3.0;\n  for(int i=0;i<14;i++){\n    vec3 p=ro+rd*t-base;\n    float y=p.y;\n    if(y>0.0 && y<4.0){\n      vec3 q=p; q.xz += vec2(sin(y*1.3+uTime*0.7), cos(y*1.1+uTime*0.5))*0.12*y;\n      float r=length(q.xz);\n      float n=fbm(vec3(q.x*3.0, y*1.6-uTime*1.2, q.z*3.0),3);\n      float d=sat(n*1.4+0.4-r*2.2)*smoothstep(0.0,0.4,y)*smoothstep(4.0,1.0,y)*amt;\n      float al=1.0-exp(-d*dt*5.0);\n      acc.rgb += (1.0-acc.a)*al*sc*0.6;\n      acc.a += (1.0-acc.a)*al;\n    }\n    t+=dt;\n  }\n  return acc;\n}\n\n// ---- full trace of the room. Returns colour and hit distance.\nvec4 roomTrace(vec3 ro, vec3 rd, Mem m, int steps){\n  float t=0.0; vec2 h=vec2(0.0);\n  bool hit=false;\n  for(int i=0;i<200;i++){\n    if(i>=steps) break;\n    h = roomMap(ro+rd*t, m);\n    if(h.x<0.0003*t+0.0005){ hit=true; break; }\n    t += h.x*0.9;\n    if(t>120.0) break;\n  }\n  // tea surface is analytic (flat disk inside the bowl)\n  float tTea = 1e5;\n  if(m.tea>0.01 && m.bowlOn>0.5){\n    float yT = teaHeight(m.tea);\n    vec3 lo = bowlLocal(ro,m), ld = rd; ld.xy = rot(m.bowlTilt)*ld.xy;\n    float tt = (yT-lo.y)/ld.y;\n    if(tt>0.0){ vec3 q=lo+ld*tt; if(length(q.xz)<teaRadius(yT)) tTea=tt; }\n  }\n  vec3 col = vec3(0);\n  if(hit || tTea<1e4){\n    if(tTea < t || !hit){\n      t = tTea;\n      col = teaShade(ro+rd*t, -rd, m, 0.8);\n    } else {\n      vec3 p = ro+rd*t;\n      vec3 n = roomNormal(p, m);\n      vec3 v = -rd;\n      float ao = roomAO(p, n, m);\n      if(h.y==1.0){\n        vec3 q = bowlLocal(p,m);\n        vec3 nq = n; nq.xy = rot(m.bowlTilt)*nq.xy;\n        Surf s = bowlSurface(q, nq, v);\n        s.n.xy = rot(-m.bowlTilt)*s.n.xy; s.cn.xy = rot(-m.bowlTilt)*s.cn.xy;\n        col = roomLightSurf(s, p, v, m, ao);\n      } else if(h.y==2.0){\n        Surf s = tenmokuSurface(tenLocal(p,m), n);\n        col = roomLightSurf(s, p, v, m, ao);\n      } else if(h.y==3.0){\n        Surf s = defaultSurf(n);\n        s.alb = woodTable(p);\n        // ring stain where the second bowl stood\n        vec3 tq = tenLocal(p, m);\n        float rr = length(tq.xz);\n        s.alb *= 1.0 - 0.35*m.ring*smoothstep(0.03,0.0,abs(rr-0.2))*step(p.y,0.01);\n        s.rough = 0.55; s.coat = 0.35; s.coatRough = 0.16;\n        col = roomLightSurf(s, p, v, m, ao);\n      } else if(h.y==4.0){\n        col = wallRadiance(p, rd, m);\n      } else if(h.y==5.0){\n        Surf s = defaultSurf(n);\n        // tatami\n        float weave = 0.85+0.15*sin(p.x*40.0);\n        s.alb = vec3(0.32,0.28,0.16)*weave; s.rough=0.8;\n        col = roomLightSurf(s, p, v, m, ao);\n      } else if(h.y==7.0){\n        Surf s = defaultSurf(n);\n        vec3 q = p-candlePos();\n        s.alb = q.y>0.1 ? vec3(0.8,0.75,0.65) : vec3(0.3,0.18,0.1);\n        s.sss = 1.0; s.rough=0.6;\n        col = roomLightSurf(s, p, v, m, ao);\n        // wax glows near the top\n        col += vec3(1.0,0.5,0.2)*m.candle*smoothstep(0.5,0.8,q.y)*0.6;\n      }\n    }\n  } else {\n    col = roomAmbient(ro, -rd, m)*0.2;\n    t = 120.0;\n  }\n  // candle flame (additive glow along the ray)\n  if(m.candle>0.01){\n    vec3 fl = candlePos()+vec3(0.0,1.05,0.0);\n    vec3 oc = fl-ro; float tc = max(dot(oc,rd),0.0);\n    if(tc<t+0.2){\n      vec3 d = ro+rd*tc-fl; d.y *= 0.45;\n      float fd = length(d);\n      col += vec3(1.0,0.62,0.25)*m.candle*(0.02/(fd*fd+0.004) + 0.15*exp(-fd*4.0));\n    }\n  }\n  return vec4(col, t);\n}\n\n// sunbeams through the open panel, with drifting dust\nvec3 roomBeams(vec3 ro, vec3 rd, float tmax, Mem m, int N, float dens){\n  vec3 L = sunDir(m);\n  vec3 sc = sunColor(m);\n  if(sunUp(m)<0.01) return vec3(0);\n  float tEnd = min(tmax, 30.0);\n  float dt = tEnd/float(N);\n  float t = dt*ign(gl_FragCoord.xy+uTime*60.0);\n  vec3 acc = vec3(0);\n  float mu = dot(rd, L);\n  float g=0.55; float phase = (1.0-g*g)/(4.0*PI*pow(1.0+g*g-2.0*g*mu,1.5));\n  for(int i=0;i<64;i++){\n    if(i>=N) break;\n    vec3 p = ro+rd*t;\n    vec2 tr = wallTransmit(p, L, m);\n    float d = dens*(0.7+0.6*vnoise(p*0.7+vec3(0.0,uTime*0.05,0.0)));\n    acc += tr.x*d*dt;\n    t += dt;\n  }\n  return acc*sc*phase;\n}\n\n// ---------------------------------------------------------------- scene: LIFE\nuniform float uMemDay, uMemSeason, uMemTwo, uMemGap, uMemCandle, uMemSteam, uMemTea, uMemTea2, uMemOpen, uMemRing;\nuniform float uBowlOn, uBowlTilt;\nuniform vec3  uBowlOff;\nuniform float uBeams;\nout vec4 fragColor;\n\nMem currentMem(){\n  Mem m;\n  m.day=uMemDay; m.season=uMemSeason; m.two=uMemTwo; m.gap=uMemGap; m.candle=uMemCandle;\n  m.steam=uMemSteam; m.tea=uMemTea; m.tea2=uMemTea2; m.open=uMemOpen; m.ring=uMemRing;\n  m.bowlOn=uBowlOn; m.bowlOff=uBowlOff; m.bowlTilt=uBowlTilt;\n  return m;\n}\n\nvoid main(){\n  Mem m = currentMem();\n  vec3 ro = uCamPos, rd = camRay(gl_FragCoord.xy);\n  vec4 r = roomTrace(ro, rd, m, 140);\n  vec3 col = r.rgb;\n  // steam above the bowls\n  vec4 st = steamVolume(ro, rd, r.a, m.bowlOff+vec3(0,teaHeight(m.tea),0), m.steam*step(0.01,m.tea), m);\n  vec4 st2 = steamVolume(ro, rd, r.a, vec3(-m.gap*0.95, 0.45, m.gap*0.3), m.steam*m.two*step(0.01,m.tea2), m);\n  col = col*(1.0-st.a)+st.rgb;\n  col = col*(1.0-st2.a)+st2.rgb;\n  col += roomBeams(ro, rd, r.a, m, 24, 0.05*uBeams);\n  fragColor = vec4(col, r.a);\n}\n"}};
+// Minimal WebGL2 helpers shared by the film and the dev spikes.
+const GLX = (() => {
+  function compile(gl, type, src, label) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    return s;
+  }
+
+  function checkShader(gl, s, src, label) {
+    if (gl.getShaderParameter(s, gl.COMPILE_STATUS)) return;
+    const log = gl.getShaderInfoLog(s) || '';
+    const lines = src.split('\n');
+    const ctx = [];
+    const re = /ERROR: \d+:(\d+)/g;
+    let m;
+    while ((m = re.exec(log))) {
+      const ln = +m[1];
+      for (let i = Math.max(1, ln - 2); i <= Math.min(lines.length, ln + 2); i++)
+        ctx.push((i === ln ? '>>' : '  ') + i + ': ' + lines[i - 1]);
+      ctx.push('--');
+    }
+    throw new Error('[' + label + '] shader compile failed\n' + log + '\n' + ctx.join('\n'));
+  }
+
+  const VS = `#version 300 es
+  out vec2 vUv;
+  void main(){
+    vec2 p = vec2((gl_VertexID<<1)&2, gl_VertexID&2);
+    vUv = p;
+    gl_Position = vec4(p*2.0-1.0, 0.0, 1.0);
+  }`;
+
+  // Programs are created in two steps so compiles can run in parallel
+  // (KHR_parallel_shader_compile) while a loading screen animates.
+  function beginProgram(gl, fsSrc, label) {
+    const vs = compile(gl, gl.VERTEX_SHADER, VS, label + ':vs');
+    const fs = compile(gl, gl.FRAGMENT_SHADER, fsSrc, label);
+    const p = gl.createProgram();
+    gl.attachShader(p, vs);
+    gl.attachShader(p, fs);
+    gl.linkProgram(p);
+    return { gl, p, vs, fs, fsSrc, label, ready: false, uniforms: {} };
+  }
+
+  function isDone(prog, ext) {
+    if (!ext) return true;
+    return prog.gl.getProgramParameter(prog.p, ext.COMPLETION_STATUS_KHR);
+  }
+
+  function finishProgram(prog) {
+    const gl = prog.gl;
+    if (!gl.getProgramParameter(prog.p, gl.LINK_STATUS)) {
+      checkShader(gl, prog.vs, VS, prog.label + ':vs');
+      checkShader(gl, prog.fs, prog.fsSrc, prog.label);
+      throw new Error('[' + prog.label + '] link failed: ' + gl.getProgramInfoLog(prog.p));
+    }
+    const n = gl.getProgramParameter(prog.p, gl.ACTIVE_UNIFORMS);
+    for (let i = 0; i < n; i++) {
+      const info = gl.getActiveUniform(prog.p, i);
+      const name = info.name.replace(/\[0\]$/, '');
+      prog.uniforms[name] = { loc: gl.getUniformLocation(prog.p, info.name), type: info.type, size: info.size };
+    }
+    prog.ready = true;
+    return prog;
+  }
+
+  function program(gl, fsSrc, label) {
+    return finishProgram(beginProgram(gl, fsSrc, label));
+  }
+
+  // Set uniforms by name; unknown names are ignored so scenes can share one
+  // big uniform bag.
+  let texUnit = 0;
+  function use(prog) {
+    prog.gl.useProgram(prog.p);
+    texUnit = 0;
+  }
+
+  function set(prog, name, v) {
+    const u = prog.uniforms[name];
+    if (!u) return;
+    const gl = prog.gl;
+    const L = u.loc;
+    switch (u.type) {
+      case gl.FLOAT:
+        if (u.size > 1) gl.uniform1fv(L, v); else gl.uniform1f(L, v);
+        break;
+      case gl.FLOAT_VEC2: gl.uniform2fv(L, v); break;
+      case gl.FLOAT_VEC3: gl.uniform3fv(L, v); break;
+      case gl.FLOAT_VEC4: gl.uniform4fv(L, v); break;
+      case gl.INT: case gl.BOOL: gl.uniform1i(L, v); break;
+      case gl.FLOAT_MAT3: gl.uniformMatrix3fv(L, false, v); break;
+      case gl.FLOAT_MAT4: gl.uniformMatrix4fv(L, false, v); break;
+      case gl.SAMPLER_2D: {
+        gl.activeTexture(gl.TEXTURE0 + texUnit);
+        gl.bindTexture(gl.TEXTURE_2D, v);
+        gl.uniform1i(L, texUnit++);
+        break;
+      }
+    }
+  }
+
+  function setAll(prog, bag) {
+    for (const k in bag) set(prog, k, bag[k]);
+  }
+
+  function target(gl, w, h, opts = {}) {
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    const internal = opts.internal || gl.RGBA16F;
+    const format = opts.format || gl.RGBA;
+    const type = opts.type || gl.HALF_FLOAT;
+    gl.texImage2D(gl.TEXTURE_2D, 0, internal, w, h, 0, format, type, null);
+    const filt = opts.nearest ? gl.NEAREST : gl.LINEAR;
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filt);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filt);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const fb = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return { tex, fb, w, h };
+  }
+
+  function draw(gl, tgt) {
+    if (tgt) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, tgt.fb);
+      gl.viewport(0, 0, tgt.w, tgt.h);
+    } else {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+    }
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  // Camera: returns a 3x3 basis (column-major) for look-at.
+  function lookAt(eye, target, roll = 0) {
+    const f = norm(sub(target, eye));
+    let up = [Math.sin(roll), Math.cos(roll), 0];
+    let r = norm(cross(f, up));
+    const u = cross(r, f);
+    return [r[0], r[1], r[2], u[0], u[1], u[2], f[0], f[1], f[2]];
+  }
+
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+  const mul = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const len = a => Math.hypot(a[0], a[1], a[2]);
+  const norm = a => { const l = len(a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const mix = (a, b, t) => Array.isArray(a) ? a.map((x, i) => x + (b[i] - x) * t) : a + (b - a) * t;
+  const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+  const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+
+  return { program, beginProgram, finishProgram, isDone, use, set, setAll, target, draw, lookAt,
+    v: { sub, add, mul, dot, len, norm, cross, mix, clamp, smooth } };
+})();
+if (typeof module !== 'undefined') module.exports = GLX;
+
+// Timeline utilities: easing, keyframe tracks, and the tempo grid.
+const TL = (() => {
+  const BPM = 72;
+  const BAR = 240 / BPM;          // seconds per 4/4 bar
+  const BEAT = 60 / BPM;
+  const bar = b => b * BAR;
+
+  const ease = {
+    lin: x => x,
+    in: x => x * x,
+    out: x => 1 - (1 - x) * (1 - x),
+    io: x => x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2,
+    io3: x => x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2,
+    sine: x => 0.5 - 0.5 * Math.cos(Math.PI * x),
+    expo: x => x === 1 ? 1 : 1 - Math.pow(2, -10 * x),
+    step: x => x < 1 ? 0 : 1,
+  };
+  const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+  const lin = (a, b, x) => clamp((x - a) / (b - a), 0, 1);
+  const smooth = (a, b, x) => { const t = lin(a, b, x); return t * t * (3 - 2 * t); };
+  const mix = (a, b, t) => Array.isArray(a) ? a.map((v, i) => v + (b[i] - v) * t) : a + (b - a) * t;
+
+  // keys: [[t, value, easeName?], ...] sorted; ease applies to the segment ending at that key
+  function track(keys) {
+    return t => {
+      if (t <= keys[0][0]) return keys[0][1];
+      for (let i = 1; i < keys.length; i++) {
+        if (t <= keys[i][0]) {
+          const [t0, v0] = keys[i - 1], [t1, v1, e] = keys[i];
+          const x = (t - t0) / (t1 - t0);
+          return mix(v0, v1, (ease[e || 'sine'])(x));
+        }
+      }
+      return keys[keys.length - 1][1];
+    };
+  }
+
+  // smooth Catmull-Rom path through points (for cameras), param 0..1 with
+  // approximately uniform speed via arc-length table
+  function path(points) {
+    const P = i => points[clamp(i, 0, points.length - 1)];
+    const raw = u => {
+      const n = points.length - 1;
+      const x = clamp(u, 0, 1) * n;
+      const i = Math.min(n - 1, Math.floor(x)), t = x - i;
+      const p0 = P(i - 1), p1 = P(i), p2 = P(i + 1), p3 = P(i + 2);
+      const t2 = t * t, t3 = t2 * t;
+      return p1.map((_, c) => 0.5 * ((2 * p1[c]) + (-p0[c] + p2[c]) * t + (2 * p0[c] - 5 * p1[c] + 4 * p2[c] - p3[c]) * t2 + (-p0[c] + 3 * p1[c] - 3 * p2[c] + p3[c]) * t3));
+    };
+    const N = 200, lens = [0];
+    let prev = raw(0);
+    for (let i = 1; i <= N; i++) {
+      const q = raw(i / N);
+      lens.push(lens[i - 1] + Math.hypot(...q.map((v, c) => v - prev[c])));
+      prev = q;
+    }
+    const total = lens[N];
+    return s => {
+      const target = clamp(s, 0, 1) * total;
+      let lo = 0, hi = N;
+      while (hi - lo > 1) { const m = (lo + hi) >> 1; if (lens[m] < target) lo = m; else hi = m; }
+      const f = (target - lens[lo]) / Math.max(1e-9, lens[hi] - lens[lo]);
+      return raw((lo + f) / N);
+    };
+  }
+
+  return { BPM, BAR, BEAT, bar, ease, clamp, lin, smooth, mix, track, path };
+})();
+
+// Bowl geometry data: profiles for every stage of its life, fracture seeds.
+const Bowl = (() => {
+  // centerline (r, y) + half thickness. Units: 1.0 = 10 cm.
+  const FINAL = [
+    [0.00, 0.100, 0.042],
+    [0.16, 0.100, 0.041],
+    [0.30, 0.128, 0.036],
+    [0.425, 0.205, 0.031],
+    [0.515, 0.320, 0.028],
+    [0.572, 0.460, 0.026],
+    [0.598, 0.600, 0.024],
+    [0.604, 0.715, 0.021],
+  ];
+  const FOOT = { stroke: [0.235, 0.085, 0.245, 0.030], th: 0.026 };
+
+  // Throwing keyframes (same point count). The clay is centred, opened, pulled, shaped.
+  const LUMP = [
+    [0.00, 0.30, 0.26],
+    [0.10, 0.30, 0.25],
+    [0.20, 0.29, 0.22],
+    [0.28, 0.26, 0.18],
+    [0.33, 0.21, 0.14],
+    [0.36, 0.16, 0.10],
+    [0.38, 0.11, 0.07],
+    [0.39, 0.07, 0.05],
+  ];
+  const CONE = [
+    [0.00, 0.14, 0.12],
+    [0.08, 0.20, 0.13],
+    [0.14, 0.30, 0.13],
+    [0.18, 0.42, 0.12],
+    [0.21, 0.54, 0.11],
+    [0.22, 0.66, 0.10],
+    [0.22, 0.76, 0.09],
+    [0.21, 0.84, 0.08],
+  ];
+  const OPENED = [
+    [0.00, 0.12, 0.06],
+    [0.18, 0.12, 0.06],
+    [0.30, 0.13, 0.07],
+    [0.36, 0.17, 0.08],
+    [0.38, 0.26, 0.08],
+    [0.38, 0.36, 0.075],
+    [0.38, 0.45, 0.07],
+    [0.38, 0.53, 0.06],
+  ];
+  const CYLINDER = [
+    [0.00, 0.11, 0.05],
+    [0.20, 0.11, 0.05],
+    [0.33, 0.12, 0.045],
+    [0.40, 0.17, 0.04],
+    [0.43, 0.30, 0.034],
+    [0.445, 0.45, 0.03],
+    [0.45, 0.60, 0.028],
+    [0.45, 0.74, 0.025],
+  ];
+  // thrown bowl before trimming (a little heavier at the base, no foot)
+  const THROWN = FINAL.map(([r, y, t], i) => [r * 1.0, y + (i < 3 ? 0.0 : 0.0), t * 1.15]);
+  THROWN[0] = [0.00, 0.075, 0.07];
+  THROWN[1] = [0.16, 0.075, 0.07];
+  THROWN[2] = [0.30, 0.100, 0.055];
+
+  const STAGES = { LUMP, CONE, OPENED, CYLINDER, THROWN, FINAL };
+
+  function lerpProfile(a, b, t) {
+    return a.map((p, i) => [p[0] + (b[i][0] - p[0]) * t, p[1] + (b[i][1] - p[1]) * t, p[2] + (b[i][2] - p[2]) * t]);
+  }
+
+  // Catmull-Rom resample to NPROF points so the lathe has no visible facets.
+  const NPROF = 16;
+  function resample(prof, n = NPROF) {
+    const P = i => prof[Math.max(0, Math.min(prof.length - 1, i))];
+    const out = [];
+    for (let k = 0; k < n; k++) {
+      const u = k / (n - 1) * (prof.length - 1);
+      const i = Math.min(prof.length - 2, Math.floor(u)), t = u - i;
+      const p0 = P(i - 1), p1 = P(i), p2 = P(i + 1), p3 = P(i + 2);
+      const t2 = t * t, t3 = t2 * t;
+      out.push([0, 1, 2].map(c => 0.5 * ((2 * p1[c]) + (-p0[c] + p2[c]) * t + (2 * p0[c] - 5 * p1[c] + 4 * p2[c] - p3[c]) * t2 + (-p0[c] + 3 * p1[c] - 3 * p2[c] + p3[c]) * t3)));
+    }
+    return out;
+  }
+  function packProfile(prof) {
+    const r = resample(prof);
+    const out = new Float32Array(NPROF * 4);
+    r.forEach((p, i) => { out[i * 4] = p[0]; out[i * 4 + 1] = p[1]; out[i * 4 + 2] = p[2]; });
+    return out;
+  }
+
+  // Deterministic PRNG
+  function rng(seed) {
+    let s = seed >>> 0;
+    return () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  }
+
+  // point on the centerline at arc parameter s (0..1)
+  function centerAt(prof, s) {
+    const segs = [];
+    let total = 0;
+    for (let i = 0; i < prof.length - 1; i++) {
+      const L = Math.hypot(prof[i + 1][0] - prof[i][0], prof[i + 1][1] - prof[i][1]);
+      segs.push(L); total += L;
+    }
+    let acc = s * total;
+    for (let i = 0; i < segs.length; i++) {
+      if (acc <= segs[i] || i === segs.length - 1) {
+        const t = Math.min(1, acc / segs[i]);
+        return [prof[i][0] + (prof[i + 1][0] - prof[i][0]) * t, prof[i][1] + (prof[i + 1][1] - prof[i][1]) * t];
+      }
+      acc -= segs[i];
+    }
+  }
+
+  // Fracture seeds: impact on the rim-side of the bowl at angle IMPACT.
+  const IMPACT = -0.6;
+  const NSEED = 14;
+  function makeSeeds() {
+    const r = rng(7);
+    const seeds = [];
+    seeds.push([0, 0.07, 0]);                 // the base stays one piece
+    const spec = [
+      // [arc s, angle offset from impact] — denser near the impact
+      [0.93, 0.05], [0.80, -0.35], [0.88, 0.45], [0.66, 0.15],
+      [0.55, -0.9], [0.62, 1.05], [0.82, -1.55], [0.86, 1.75],
+      [0.60, 2.45], [0.78, 3.0], [0.58, -2.4], [0.84, -3.3],
+      [0.40, 3.6],
+    ];
+    for (const [s, da] of spec) {
+      const c = centerAt(FINAL, s + (r() - 0.5) * 0.04);
+      const a = IMPACT + da + (r() - 0.5) * 0.15;
+      seeds.push([c[0] * Math.cos(a), c[1], c[0] * Math.sin(a)]);
+    }
+    return seeds;
+  }
+  const SEEDS = makeSeeds();
+  function packSeeds() {
+    const out = new Float32Array(NSEED * 4);
+    SEEDS.forEach((s, i) => { out[i * 4] = s[0]; out[i * 4 + 1] = s[1]; out[i * 4 + 2] = s[2]; });
+    return out;
+  }
+
+  // inner radius of the cavity at height y (for the liquid surface)
+  function innerRadius(y) {
+    const prof = FINAL;
+    for (let i = 0; i < prof.length - 1; i++) {
+      const [r0, y0, t0] = prof[i], [r1, y1, t1] = prof[i + 1];
+      if (y >= y0 && y <= y1) {
+        const t = (y - y0) / (y1 - y0);
+        return r0 + (r1 - r0) * t - (t0 + (t1 - t0) * t) * 1.05;
+      }
+    }
+    return 0.0;
+  }
+
+  return { NPROF, resample, STAGES, FINAL, FOOT, lerpProfile, packProfile, SEEDS, NSEED, packSeeds, IMPACT, innerRadius, rng, centerAt };
+})();
+if (typeof module !== 'undefined') module.exports = Bowl;
+
+// Film renderer: scene passes -> transition composite -> DOF -> bloom -> final grade.
+const Engine = (() => {
+  const ASPECT = 2.39;
+
+  function splitChunks(src) {
+    const out = {};
+    const parts = src.split(/^\/\/@@ /m);
+    for (const p of parts) {
+      const nl = p.indexOf('\n');
+      if (nl < 0) continue;
+      out[p.slice(0, nl).trim()] = '#version 300 es\n' + p.slice(nl + 1);
+    }
+    return out;
+  }
+
+  class Renderer {
+    constructor(canvas, sources) {
+      this.canvas = canvas;
+      const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, preserveDrawingBuffer: !!sources.preserve, powerPreference: 'high-performance' });
+      if (!gl) throw new Error('WebGL2 is not available in this browser.');
+      if (!gl.getExtension('EXT_color_buffer_float')) throw new Error('EXT_color_buffer_float is required.');
+      gl.getExtension('OES_texture_float_linear');
+      this.gl = gl;
+      this.pext = gl.getExtension('KHR_parallel_shader_compile');
+      this.sources = sources;
+      this.scenes = {};
+      this.post = {};
+      this.pending = [];
+      this.scale = 1.0;          // dynamic render scale
+      this.targets = null;
+      this.overlayTex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, this.overlayTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    }
+
+    // queue all programs; returns a promise that resolves when compiled
+    compileAll(onProgress) {
+      const gl = this.gl;
+      const chunks = splitChunks(this.sources.post);
+      const jobs = [];
+      for (const k in chunks) jobs.push({ kind: 'post', name: k, src: chunks[k] });
+      for (const name in this.sources.scenes) jobs.push({ kind: 'scene', name, src: this.sources.scenes[name] });
+      const progs = jobs.map(j => ({ j, p: GLX.beginProgram(gl, j.src, j.name) }));
+      return new Promise((resolve, reject) => {
+        const poll = () => {
+          try {
+            let done = 0;
+            for (const it of progs) {
+              if (it.p.ready) { done++; continue; }
+              if (GLX.isDone(it.p, this.pext)) {
+                GLX.finishProgram(it.p);
+                (it.j.kind === 'post' ? this.post : this.scenes)[it.j.name] = it.p;
+                done++;
+              }
+            }
+            onProgress && onProgress(done / progs.length);
+            if (done === progs.length) resolve(); else setTimeout(poll, 30);
+          } catch (e) { reject(e); }
+        };
+        poll();
+      });
+    }
+
+    resize(w, h, scale) {
+      const gl = this.gl;
+      const rw = Math.max(64, Math.round(w * scale)), rh = Math.max(32, Math.round(h * scale));
+      const t = this.targets;
+      if (t && t.w === w && t.h === h && t.rw === rw && t.rh === rh) return;
+      const del = x => { if (x) { gl.deleteTexture(x.tex); gl.deleteFramebuffer(x.fb); } };
+      if (t) { [t.A, t.B, t.comp, t.coc, t.dof, t.dofmix].forEach(del); t.down.forEach(del); t.up.forEach(del); }
+      const T = { w, h, rw, rh };
+      T.A = GLX.target(gl, rw, rh);
+      T.B = GLX.target(gl, rw, rh);
+      T.comp = GLX.target(gl, rw, rh);
+      T.coc = GLX.target(gl, rw, rh);
+      T.dof = GLX.target(gl, rw >> 1, rh >> 1);
+      T.dofmix = GLX.target(gl, rw, rh);
+      T.down = []; T.up = [];
+      let bw = rw >> 1, bh = rh >> 1;
+      for (let i = 0; i < 6 && bw > 4 && bh > 4; i++) {
+        T.down.push(GLX.target(gl, bw, bh));
+        T.up.push(GLX.target(gl, bw, bh));
+        bw >>= 1; bh >>= 1;
+      }
+      this.targets = T;
+    }
+
+    setOverlay(canvas2d) {
+      const gl = this.gl;
+      gl.bindTexture(gl.TEXTURE_2D, this.overlayTex);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas2d);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    }
+
+    renderScene(name, bag, tgt) {
+      const p = this.scenes[name];
+      if (!p) throw new Error('no scene ' + name);
+      GLX.use(p);
+      GLX.setAll(p, bag);
+      GLX.draw(this.gl, tgt);
+    }
+
+    // frame: { a:{scene, bag}, b?:{scene,bag}, mix, mode, center, post:{...}, cam }
+    frame(f) {
+      const gl = this.gl, T = this.targets;
+      const res = [T.rw, T.rh];
+      const common = { uRes: res };
+      this.renderScene(f.a.scene, Object.assign({}, f.a.bag, common), T.A);
+      let src = T.A;
+      if (f.b && f.mix > 0) {
+        this.renderScene(f.b.scene, Object.assign({}, f.b.bag, common), T.B);
+        const p = this.post.POST_COMPOSITE;
+        GLX.use(p);
+        GLX.setAll(p, {
+          uA: T.A.tex, uB: T.B.tex, uMix: f.mix, uMode: f.mode || 0, uRes: res,
+          uCamPos: f.a.bag.uCamPos, uCamRot: f.a.bag.uCamRot, uFov: f.a.bag.uFov,
+          uCenter: f.center || [0, 0.3, 0], uTime: f.a.bag.uTime || 0,
+        });
+        GLX.draw(gl, T.comp);
+        src = T.comp;
+      }
+      const P = f.post;
+      // depth of field
+      if (P.aperture > 0) {
+        const maxCoc = P.maxCoc * T.rh / 540;
+        let p = this.post.POST_COC; GLX.use(p);
+        GLX.setAll(p, { uSrc: src.tex, uFocus: P.focus, uAperture: P.aperture, uMaxCoc: maxCoc });
+        GLX.draw(gl, T.coc);
+        p = this.post.POST_DOF; GLX.use(p);
+        GLX.setAll(p, { uSrc: T.coc.tex, uTexel: [1 / T.rw, 1 / T.rh], uMaxCoc: maxCoc });
+        GLX.draw(gl, T.dof);
+        p = this.post.POST_DOFMIX; GLX.use(p);
+        GLX.setAll(p, { uSharp: T.coc.tex, uBlur: T.dof.tex });
+        GLX.draw(gl, T.dofmix);
+        src = T.dofmix;
+      }
+      // bloom pyramid
+      let p = this.post.POST_DOWN; GLX.use(p);
+      let prev = src;
+      for (let i = 0; i < T.down.length; i++) {
+        GLX.setAll(p, { uSrc: prev.tex, uTexel: [1 / prev.w, 1 / prev.h], uThresh: P.bloomThresh, uFirst: i === 0 ? 1 : 0 });
+        GLX.draw(gl, T.down[i]);
+        prev = T.down[i];
+      }
+      p = this.post.POST_UP; GLX.use(p);
+      const n = T.down.length;
+      // start from the smallest level
+      let acc = T.down[n - 1];
+      for (let i = n - 2; i >= 0; i--) {
+        GLX.setAll(p, { uSrc: acc.tex, uPrev: T.down[i].tex, uTexel: [1 / acc.w, 1 / acc.h], uRadius: 1.0 });
+        GLX.draw(gl, T.up[i]);
+        acc = T.up[i];
+      }
+      p = this.post.POST_FINAL; GLX.use(p);
+      GLX.setAll(p, {
+        uSrc: src.tex, uBloom: acc.tex, uOverlay: this.overlayTex, uRes: [gl.drawingBufferWidth, gl.drawingBufferHeight],
+        uExposure: P.exposure, uBloomAmt: P.bloom, uGrain: P.grain, uVignette: P.vignette, uCA: P.ca,
+        uTime: f.a.bag.uTime || 0, uLetterbox: 0, uFade: P.fade, uOverlayAmt: P.overlay, uShimmer: P.shimmer,
+        uLift: P.lift, uGamma: P.gamma, uGain: P.gain, uSat: P.sat, uTintShadow: P.tintShadow, uTintHigh: P.tintHigh,
+        uContrast: P.contrast,
+      });
+      GLX.draw(gl, null);
+    }
+  }
+
+  const DEFAULT_POST = {
+    exposure: 1.0, bloom: 0.06, bloomThresh: 1.2, grain: 0.035, vignette: 0.55, ca: 0.012,
+    fade: 1.0, overlay: 0.0, shimmer: 0.0,
+    lift: [0, 0, 0], gamma: [1, 1, 1], gain: [1, 1, 1], sat: 1.0, contrast: 1.0,
+    tintShadow: [1, 1, 1], tintHigh: [1, 1, 1],
+    focus: 3.0, aperture: 0.0, maxCoc: 10.0,
+  };
+
+  return { Renderer, ASPECT, DEFAULT_POST };
+})();
+
+// The director: maps film time to scenes, cameras, uniforms and grading.
+const Film = (() => {
+  const { bar, track, path, lin, smooth, mix, clamp, ease } = TL;
+  const V = GLX.v;
+
+  const TEN_PROFILE = (() => {
+    const P = [[0.0, 0.07, 0.03], [0.12, 0.075, 0.03], [0.3, 0.2, 0.026], [0.46, 0.42, 0.022], [0.54, 0.6, 0.02], [0.555, 0.64, 0.018]];
+    const a = new Float32Array(24);
+    P.forEach((p, i) => { a[i * 4] = p[0] * 0.95; a[i * 4 + 1] = p[1] * 0.95; a[i * 4 + 2] = p[2]; });
+    return a;
+  })();
+
+  const BOWL_BASE = {
+    uProf: Bowl.packProfile(Bowl.FINAL), uFoot: Bowl.FOOT.stroke, uFootTh: Bowl.FOOT.th, uProf2: TEN_PROFILE,
+    uWobble: 0.012, uOval: 0.015, uRidge: 0.0, uSpin: 0,
+    uWet: 0, uDry: 1, uGlazeRaw: 0, uMelt: 1, uHeat: 0, uAsh: 0.3, uCrackle: 1, uStain: 0, uGold: 0,
+    uSeeds: Bowl.packSeeds(),
+  };
+
+  function cam(eye, target, fov, roll = 0) {
+    return { uCamPos: eye, uCamRot: GLX.lookAt(eye, target, roll), uFov: fov };
+  }
+
+  // ------------------------------------------------------------------ LIFE
+  // Bars 29..47. A lifetime at the table, told in time-lapse.
+  const LIFE0 = bar(29), LIFE1 = bar(47);
+  const life = (() => {
+    const L = x => LIFE0 + x;               // local seconds
+    const day = track([[L(0), 0.27], [L(60), 0.27 + 22.0, 'lin']]); // continuous day counter (fractional part used)
+    return (t) => {
+      const lt = t - LIFE0;
+      const m = {
+        uMemDay: 0.34, uMemSeason: 0.1, uMemTwo: 1, uMemGap: 1.45, uMemCandle: 0, uMemSteam: 1, uMemTea: 0.6, uMemTea2: 0.6,
+        uMemOpen: 0.5, uMemRing: 0, uBowlOn: 1, uBowlOff: [0, 0, 0], uBowlTilt: 0, uBeams: 1,
+      };
+      const e = [1.7, 2.1, -3.9], tg = [-0.45, 0.3, 0.5];
+      return {
+        scene: 'life',
+        bag: Object.assign({}, BOWL_BASE, m, cam(e, tg, 0.3), { uTime: t, uLocal: lt, uStain: 0.3 }),
+        post: { exposure: 1.0, focus: V.len(V.sub(tg, e)), aperture: 0.9, maxCoc: 9, bloom: 0.08, grain: 0.03 },
+      };
+    };
+  })();
+
+  const SHOTS = [
+    { name: 'life', t0: 0, t1: 1e9, fn: life },
+  ];
+  const DURATION = bar(76);
+
+  function frameAt(t) {
+    let cur = SHOTS[SHOTS.length - 1];
+    for (const s of SHOTS) if (t >= s.t0 && t < s.t1) { cur = s; break; }
+    const a = cur.fn(t);
+    const f = { a: { scene: a.scene, bag: a.bag }, post: Object.assign({}, Engine.DEFAULT_POST, a.post) };
+    const ov = Film.override;
+    if (ov) for (const k in ov) {
+      if (k === 'eye' || k === 'tgt') continue;
+      if (k in f.post) f.post[k] = ov[k]; else f.a.bag[k] = ov[k];
+    }
+    if (ov && (ov.eye || ov.tgt)) {
+      const e = ov.eye || f.a.bag.uCamPos, g = ov.tgt || [0, 0.35, 0];
+      Object.assign(f.a.bag, cam(e, g, ov.fov || f.a.bag.uFov));
+      f.post.focus = V.len(V.sub(g, e));
+    }
+    return f;
+  }
+
+  const Film = { frameAt, DURATION, SHOTS, BOWL_BASE, override: null };
+  return Film;
+})();
+
+// Boot, clock, dynamic resolution, debug and capture hooks.
+(async function main() {
+  const canvas = document.getElementById('film');
+  const ui = document.getElementById('ui');
+  const status = document.getElementById('status');
+  const params = new URLSearchParams(location.search);
+  const capture = params.has('capture');
+  const debug = /debug/.test(location.hash) || params.has('debug');
+
+  let R;
+  try {
+    R = new Engine.Renderer(canvas, Object.assign({ preserve: capture }, SRC));
+  } catch (e) { status.textContent = e.message; return; }
+
+  function layout() {
+    const vw = window.innerWidth, vh = window.innerHeight;
+    let w = vw, h = vw / Engine.ASPECT;
+    if (h > vh) { h = vh; w = vh * Engine.ASPECT; }
+    const dpr = capture ? 1 : Math.min(window.devicePixelRatio || 1, 1.5);
+    canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+    canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+  }
+  layout();
+  window.addEventListener('resize', layout);
+
+  try {
+    await R.compileAll(p => { status.textContent = 'preparing ' + Math.round(p * 100) + '%'; });
+  } catch (e) {
+    console.error(e); status.textContent = 'shader error — see console'; window.__error = e.message; return;
+  }
+
+  // ---------------------------------------------------------------- render one frame
+  let scaleMax = 1.0;
+  let dyn = 0.85;
+  function renderAt(t, scale) {
+    const f = Film.frameAt(t);
+    const s = Math.min(scale, (f.post.scaleMax || 1.0));
+    R.resize(canvas.width, canvas.height, s);
+    if (f.overlay) R.setOverlay(f.overlay);
+    R.frame(f);
+    return f;
+  }
+
+  if (capture) {
+    ui.style.display = 'none';
+    // arg: "t" or "t:key=v,key=v1;v2;v3" (overrides merged into the scene uniforms/post)
+    window.__renderAt = arg => {
+      const [ts, ov] = String(arg).split(':');
+      Film.override = {};
+      if (ov) for (const kv of ov.split(',')) {
+        const [k, v] = kv.split('=');
+        const vals = v.split(';').map(Number);
+        Film.override[k] = vals.length > 1 ? vals : vals[0];
+      }
+      renderAt(+ts, +(params.get('scale') || 1)); R.gl.finish(); return 't=' + ts;
+    };
+    window.__duration = Film.DURATION;
+    window.__ready = true;
+    status.textContent = '';
+    return;
+  }
+
+  // ---------------------------------------------------------------- start screen
+  status.textContent = '';
+  ui.classList.add('ready');
+  let t0 = 0, startAt = 0, paused = false, pauseT = 0;
+  const hashT = /t=([\d.]+)/.exec(location.hash);
+  if (hashT) startAt = +hashT[1];
+
+  let audio = null;
+  function now() {
+    if (paused) return pauseT;
+    if (audio) return audio.time();
+    return (performance.now() - t0) / 1000 + startAt;
+  }
+
+  async function begin() {
+    ui.classList.add('gone');
+    if (window.Score) {
+      try { audio = await Score.start(startAt); } catch (e) { console.warn('audio failed', e); audio = null; }
+    }
+    t0 = performance.now();
+    requestAnimationFrame(loop);
+  }
+  ui.addEventListener('click', begin, { once: true });
+
+  // ---------------------------------------------------------------- debug
+  let dbg = null;
+  if (debug) {
+    dbg = document.createElement('div');
+    dbg.id = 'dbg';
+    dbg.innerHTML = '<input type=range min=0 max=' + Film.DURATION + ' step=0.01 value=0 style="width:100%"><span></span>';
+    document.body.appendChild(dbg);
+    const range = dbg.querySelector('input');
+    range.addEventListener('input', () => seek(+range.value));
+    window.addEventListener('keydown', e => {
+      if (e.code === 'Space') { paused ? resume() : pause(); e.preventDefault(); }
+      if (e.code === 'ArrowRight') seek(now() + 5);
+      if (e.code === 'ArrowLeft') seek(now() - 5);
+    });
+  }
+  function pause() { pauseT = now(); paused = true; audio && audio.pause(); }
+  function resume() { paused = false; seek(pauseT); }
+  function seek(t) {
+    t = Math.max(0, Math.min(Film.DURATION, t));
+    if (paused) { pauseT = t; return; }
+    startAt = t; t0 = performance.now();
+    if (audio) audio.seek(t);
+  }
+
+  // ---------------------------------------------------------------- loop
+  let last = performance.now(), avg = 16.7, frames = 0;
+  function loop() {
+    const nowMs = performance.now();
+    const dt = nowMs - last; last = nowMs;
+    avg = avg * 0.92 + Math.min(dt, 100) * 0.08;
+    frames++;
+    // dynamic resolution: keep frame time under ~16.7 ms
+    if (frames > 30 && frames % 10 === 0) {
+      if (avg > 18.0) dyn = Math.max(0.35, dyn * 0.93);
+      else if (avg < 15.2) dyn = Math.min(1.0, dyn * 1.03);
+    }
+    const t = now();
+    renderAt(t, dyn);
+    if (dbg) {
+      dbg.querySelector('input').value = t;
+      dbg.querySelector('span').textContent = t.toFixed(2) + 's  bar ' + (t / TL.BAR).toFixed(2) + '  ' + (1000 / avg).toFixed(0) + 'fps  scale ' + dyn.toFixed(2);
+    }
+    if (t < Film.DURATION + 1.0 || debug) requestAnimationFrame(loop);
+    else { ui.classList.remove('gone'); ui.classList.add('end'); }
+  }
+})();
+
+</script>
+</body>
+</html>

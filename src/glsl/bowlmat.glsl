@@ -53,7 +53,7 @@ Surf bowlSurface(vec3 p, vec3 n, vec3 v){
   vec3 body = mix(raw, h.side<-1.5 ? footCol : fired, sat(firedAmt*1.5));
   s.alb = body;
   s.rough = 0.85;
-  BUMP(s.n, pr, clayGrain, 0.002, 0.0006);
+  BUMP(s.n, pr, clayGrain, 0.002, 0.00025);
 
   // ---------- wet film
   if(uWet>0.0){
