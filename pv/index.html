@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase Shift — Motion Study</title>
+<meta name="description" content="A 59-second procedural motion-graphics piece with a synthesized 170 BPM score. Canvas 2D + WebGL post + WebAudio, no bitmap assets.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700&family=Archivo+Black&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root { --bg: #0b0b0c; --fg: #e9eaea; --dim: #7c7f84; --accent: #2fd6c6; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 12px "JetBrains Mono", ui-monospace, monospace; overflow: hidden; }
+  .stage { position: fixed; inset: 0 0 56px 0; display: grid; place-items: center; }
+  #view { width: min(100vw, calc((100vh - 56px) * 16 / 9)); aspect-ratio: 16 / 9; display: block; background: #000; }
+  .bar { position: fixed; left: 0; right: 0; bottom: 0; height: 56px; display: flex; align-items: center; gap: 14px; padding: 0 16px; border-top: 1px solid #1c1d20; }
+  button { background: none; border: 1px solid #2a2c30; color: var(--fg); font: inherit; height: 30px; padding: 0 12px; cursor: pointer; }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  #play { width: 44px; }
+  #scrub { flex: 1; height: 30px; position: relative; cursor: pointer; touch-action: none; }
+  #scrub::before { content: ""; position: absolute; left: 0; right: 0; top: 14px; height: 2px; background: #2a2c30; }
+  #fill { position: absolute; left: 0; top: 14px; height: 2px; background: var(--accent); }
+  #tc { color: var(--dim); min-width: 170px; text-align: right; }
+  #info { position: fixed; top: 10px; right: 14px; color: var(--accent); }
+  #gate { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(6,6,7,.86); cursor: pointer; transition: opacity .4s; z-index: 5; }
+  #gate.gone { opacity: 0; pointer-events: none; }
+  #gate .box { text-align: center; }
+  #gate h1 { font: 700 13px "Archivo", sans-serif; letter-spacing: .3em; margin: 0 0 18px; }
+  #gate .cta { display: inline-block; border: 1px solid var(--accent); color: var(--accent); padding: 12px 26px; letter-spacing: .2em; }
+  #gate p { color: var(--dim); margin-top: 18px; line-height: 1.8; }
+  a { color: var(--dim); }
+  @media (max-width: 640px) { #tc { display: none; } .bar { gap: 8px; } #mute { padding: 0 8px; } }
+</style>
+</head>
+<body>
+<div class="stage"><canvas id="view"></canvas></div>
+<div class="bar">
+  <button id="play" aria-label="play / pause">▶</button>
+  <div id="scrub" aria-label="timeline"><div id="fill"></div></div>
+  <span id="tc">00.00s · bar 01.1</span>
+  <button id="mute">SOUND ON</button>
+</div>
+<div id="info"></div>
+<div id="gate">
+  <div class="box">
+    <h1>PHASE SHIFT — MOTION STUDY 01</h1>
+    <span class="cta">▶ PLAY WITH SOUND</span>
+    <p>space 播放/暂停 · ←/→ 按小节跳转 · d 显示镜头名<br>全部画面与配乐由代码实时生成 · <a href="https://github.com/DasterProkio/DasterProkio.github.io/blob/main/pv/TEMPLATE.md" target="_blank" rel="noopener" onclick="event.stopPropagation()">可迁移模板</a></p>
+  </div>
+</div>
+<script src="engine.js"></script>
+<script src="fx.js"></script>
+<script src="audio.js"></script>
+<script src="scenes.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
