@@ -136,9 +136,9 @@ const GLX = (() => {
   }
 
   // Camera: returns a 3x3 basis (column-major) for look-at.
-  function lookAt(eye, target, roll = 0) {
+  function lookAt(eye, target, roll = 0, upv = null) {
     const f = norm(sub(target, eye));
-    let up = [Math.sin(roll), Math.cos(roll), 0];
+    let up = upv || [Math.sin(roll), Math.cos(roll), 0];
     let r = norm(cross(f, up));
     const u = cross(r, f);
     return [r[0], r[1], r[2], u[0], u[1], u[2], f[0], f[1], f[2]];

@@ -64,3 +64,22 @@ Running production log. Newest entries at the bottom of each section.
   - Cost is about 2× the Life scene in SwiftShader.
 - Known issue: a speckled "salty" inner rim on the celadon at small
   scale. Revisit in polish.
+- Spike 3, **the seam** (`scenes/seam.glsl`).
+  - Cracks are real geometry: the warped-Voronoi border carves a canyon
+    through the shell.
+  - Gold is a separate SDF that fills the canyon and domes over the
+    glaze, gated by a front expanding from the impact point. It cools
+    from molten emissive to burnished metal.
+  - Problems found and fixed:
+    - A carve sign error kept only the canyons.
+    - Gold was dark in the void because it had nothing to reflect.
+      Added a warm horizon and a low sun key.
+    - The macro plain was featureless, the horizon tilted, and the
+      camera looked across the seam instead of along it.
+      - The seam is now traced in JS (`Bowl.traceSeam`, snapping to the
+        border in (s, angle) space); the camera rides the polyline.
+      - Camera up = surface normal; key light rakes from ahead.
+      - Macro orange-peel ripple added.
+  - **Result:** a canyon receding across a jade sea toward a low sun, the
+    gold river arriving from the horizon, then the rise to the whole
+    bowl. Proven. The rise framing needs direction work.

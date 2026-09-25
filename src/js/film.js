@@ -17,8 +17,8 @@ const Film = (() => {
     uSeeds: Bowl.packSeeds(),
   };
 
-  function cam(eye, target, fov, roll = 0) {
-    return { uCamPos: eye, uCamRot: GLX.lookAt(eye, target, roll), uFov: fov };
+  function cam(eye, target, fov, roll = 0, up = null) {
+    return { uCamPos: eye, uCamRot: GLX.lookAt(eye, target, roll, up), uFov: fov };
   }
 
   // ------------------------------------------------------------------ LIFE
@@ -62,9 +62,53 @@ const Film = (() => {
     };
   };
 
+  // ------------------------------------------------------------------ SEAM
+  const SEAM0 = bar(56), SEAM1 = bar(67);
+  const seam = (() => {
+    const src = Shatter.IMPACT_LOCAL;
+    // walk along the 2/4 seam: (arc s, angle) samples from the exterior search
+    const SEAMP = Bowl.traceSeam(0.40, -1.03, 44, 0.008).slice(4);
+    const seamPos = path(SEAMP.map(q => q.p));
+    const seamNrm = path(SEAMP.map(q => q.n));
+    const alt = track([[0, 0.010], [11, 0.014, 'sine'], [27, 2.9, 'io3']]);
+    const tgtBlend = track([[12, 0], [25, 1, 'io']]);
+    return (t) => {
+      const lt = t - SEAM0;
+      const u = 0.04 + clamp(lt / 27, 0, 1) * 0.16;
+      const P = seamPos(u), N = V.norm(seamNrm(u));
+      const A = alt(lt);
+      const ahead = Math.min(1, u + 0.05 + A * 0.4);
+      const Pa = seamPos(ahead);
+      const fwd = V.norm(V.sub(Pa, P));
+      // near: hover above the seam looking along it toward the curved horizon
+      const eyeNear = V.add(P, V.mul(N, A));
+      const lookNear = V.add(eyeNear, V.add(V.mul(fwd, 1.0), V.mul(N, -0.1 - A * 1.5)));
+      // far: pull back to frame the whole bowl
+      const far = [2.0, 2.2, -2.2];
+      const w = TL.smooth(0.02, 1.8, A);
+      const back = V.add(V.add(P, V.mul(N, A)), V.mul(fwd, -A * 0.8));
+      const eye = V.mix(back, V.add([0, 0.36, 0], V.mul(V.norm(V.sub(far, [0, 0.36, 0])), A)), w * w);
+      const tg = V.mix(lookNear, [0, 0.36, 0], tgtBlend(lt));
+      const upv = V.norm(V.mix(N, [0, 1, 0], TL.smooth(12, 24, lt)));
+      const keyNear = V.norm(V.add(fwd, V.mul(N, 0.22)));
+      const key = V.norm(V.mix(keyNear, [-0.45, 0.5, 0.75], TL.smooth(12, 22, lt)));
+      const flow = 0.02 + 0.042 * lt + Math.max(0, lt - 12) * 0.05;
+      const focus = mix(A * 7.0, V.len(V.sub(tg, eye)), TL.smooth(9, 18, lt));
+      return {
+        scene: 'seam',
+        bag: Object.assign({}, BOWL_BASE, cam(eye, tg, 0.36, 0, upv), {
+          uTime: t, uLocal: lt, uStain: 0.5, uGold: 0, uGap: 0.0016, uFlow: flow, uSource: src, uCool: 0.45,
+          uKeyDir: key, uRoomLight: 0, uAlt: A,
+        }),
+        post: { exposure: 1.0, focus, aperture: 0.6, maxCoc: 9, bloom: 0.14, bloomThresh: 1.0, grain: 0.03 },
+      };
+    };
+  })();
+
   const SHOTS = [
     { name: 'life', t0: 0, t1: BRK0, fn: life },
-    { name: 'break', t0: BRK0, t1: 1e9, fn: brk },
+    { name: 'break', t0: BRK0, t1: SEAM0, fn: brk },
+    { name: 'seam', t0: SEAM0, t1: 1e9, fn: seam },
   ];
   const DURATION = bar(76);
 

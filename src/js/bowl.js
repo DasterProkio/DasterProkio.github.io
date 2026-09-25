@@ -186,6 +186,49 @@ const Bowl = (() => {
     });
   }
 
+  // point + outward normal on the exterior (side=1) or interior (side=-1) surface
+  const DENSE = resample(FINAL, 96);
+  function surfacePoint(sArc, a, side = 1) {
+    const n = DENSE.length - 1;
+    const x = Math.min(n - 1e-6, Math.max(0, sArc * n));
+    const i = Math.floor(x), t = x - i;
+    const p0 = DENSE[i], p1 = DENSE[i + 1];
+    const r = p0[0] + (p1[0] - p0[0]) * t, y = p0[1] + (p1[1] - p0[1]) * t, th = p0[2] + (p1[2] - p0[2]) * t;
+    const dr = p1[0] - p0[0], dy = p1[1] - p0[1], L = Math.hypot(dr, dy);
+    const nr = dy / L * side, ny = -dr / L * side;
+    const rr = r + nr * th;
+    return { p: [rr * Math.cos(a), y + ny * th, rr * Math.sin(a)], n: [nr * Math.cos(a), ny, nr * Math.sin(a)] };
+  }
+
+  // warped-Voronoi border distance (mirror of seamField)
+  function seamDist(p) {
+    const w = fracWarp(p);
+    let d1 = 1e9, d2 = 1e9, i1 = 0, i2 = 0;
+    SEEDS.forEach((s, i) => { const d = (w[0] - s[0]) ** 2 + (w[1] - s[1]) ** 2 + (w[2] - s[2]) ** 2; if (d < d1) { d2 = d1; i2 = i1; d1 = d; i1 = i; } else if (d < d2) { d2 = d; i2 = i; } });
+    const a = SEEDS[i1], b = SEEDS[i2];
+    return (d2 - d1) / (2 * Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]));
+  }
+  // Trace a seam line over the exterior surface in (s, angle) space starting near (s0, a0),
+  // heading toward increasing s. Returns world points + normals.
+  function traceSeam(s0, a0, steps, ds) {
+    const bdAt = (s, a) => seamDist(surfacePoint(s, a, 1).p);
+    const snap = (s, a) => { // minimise bd along angle
+      let best = a, bv = 1e9;
+      for (let k = -40; k <= 40; k++) { const aa = a + k * 0.0015; const v = bdAt(s, aa); if (v < bv) { bv = v; best = aa; } }
+      return best;
+    };
+    const pts = [];
+    let s = s0, a = snap(s0, a0);
+    for (let i = 0; i < steps; i++) {
+      const sp = surfacePoint(s, a, 1);
+      pts.push(sp);
+      const s2 = s + ds;
+      a = snap(s2, a + (pts.length > 1 ? 0 : 0));
+      s = s2;
+    }
+    return pts;
+  }
+
   // inner radius of the cavity at height y (for the liquid surface)
   function innerRadius(y) {
     const prof = FINAL;
@@ -199,6 +242,6 @@ const Bowl = (() => {
     return 0.0;
   }
 
-  return { fracWarp, cellOf, shardInfo, NPROF, resample, STAGES, FINAL, FOOT, lerpProfile, packProfile, SEEDS, NSEED, packSeeds, IMPACT, innerRadius, rng, centerAt };
+  return { seamDist, traceSeam, surfacePoint, fracWarp, cellOf, shardInfo, NPROF, resample, STAGES, FINAL, FOOT, lerpProfile, packProfile, SEEDS, NSEED, packSeeds, IMPACT, innerRadius, rng, centerAt };
 })();
 if (typeof module !== 'undefined') module.exports = Bowl;
