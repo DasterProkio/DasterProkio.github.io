@@ -185,6 +185,16 @@ const Film = (() => {
     };
   })();
 
+  // ------------------------------------------------------------------ sync cues for the score
+  Object.assign(TL.CUE, {
+    brush0: bar(1) + 0.3, brush1: bar(3.6),
+    clay0: CLAY0, fire0: FIRE0, firePeak: FIRE0 + 26, door0: FIRE0 + 31, crack0: FIRE0 + 32, crack1: FIRE0 + 39.5,
+    life0: LIFE0, pour: LIFE0 + 2.0,
+    lift: bar(45.5), fall: bar(46.6), shatter: bar(47),
+    memories: [bar(49.5), bar(51), bar(52.5), bar(54)],
+    goldArrive: SEAM0 + 7.0, ensoGold: bar(74.5),
+  });
+
   const SHOTS = [
     { name: 'clay', t0: 0, t1: CLAY1, fn: clay },
     { name: 'fire', t0: CLAY1, t1: FIRE1, fn: fire },

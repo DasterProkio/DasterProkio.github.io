@@ -104,3 +104,35 @@ Running production log. Newest entries at the bottom of each section.
     them. The fire now writes a luminance-weighted depth.
   - TODO (review): more contrast between the tongues; the other wares
     still look like eggs; tune the start of the fire.
+- Score (`src/js/audio.js`).
+  - All synthesis is sample-level JS in `KintsugiSynth`.
+  - Instruments:
+    - Shakuhachi: sine core, breath band-pass, meri-kari bend, vibrato.
+    - Koto: fractional-delay Karplus–Strong with pluck comb and oshide
+      bend.
+    - Felt piano: inharmonic additive partials, unison beating, hammer.
+    - Wavetable string pads; taiko; rin bowl; music-box bells; glaze
+      pings.
+    - Noise sound design: brush, wheel, fire, door, pour, birds,
+      cicadas, wind, shatter, gold shimmer.
+  - Rendered in 4 parallel Workers (fixed time windows, separate RNGs for
+    composition and noise, so the result is deterministic). Then an
+    OfflineAudioContext adds convolution reverb (generated,
+    energy-normalised IR), a compressor and a soft clipper, giving one
+    AudioBuffer. Picture is clocked from its playback, so sync is
+    sample-accurate and seeking is trivial.
+  - Problems found and fixed:
+    - Everything clipped at −2 dB RMS: the IR was not
+      energy-normalised.
+    - Synthesis took 80 s. Down to ~13 s single-threaded by moving
+      pitch and envelope to control rate, inlining biquads, and adding
+      early exits for piano partials; about 5 s wall-clock in parallel.
+    - Koto was ~17 cents flat because the loop filter adds half a
+      sample. Compensated; verified 0.0–0.1 cents by autocorrelation.
+    - Dynamics were too flat because the compressor lifted the intro.
+      The arc now goes: intro −19, clay −21, fire peak −10,
+      cooling −20, life −17, alone −22, frozen −18, climax −9.9 (the
+      loudest), mended −20.
+  - Tools: `tools/audio.mjs` renders to WAV in headless Chromium;
+    `tools/analyze.py` prints per-bar RMS/peak and draws a log-frequency
+    spectrogram.

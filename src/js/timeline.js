@@ -64,5 +64,8 @@ const TL = (() => {
     };
   }
 
-  return { BPM, BAR, BEAT, bar, ease, clamp, lin, smooth, mix, track, path };
+  // Sync points shared by picture and sound (seconds). Filled in by the director.
+  const CUE = {};
+
+  return { CUE, BPM, BAR, BEAT, bar, ease, clamp, lin, smooth, mix, track, path };
 })();

@@ -23,8 +23,12 @@
   layout();
   window.addEventListener('resize', layout);
 
+  // the score renders in a worker while the shaders compile
+  let pShader = 0, pAudio = 0;
+  const showProgress = () => { status.textContent = 'preparing ' + Math.round((pShader * 0.5 + pAudio * 0.5) * 100) + '%'; };
+  const audioReady = (window.Score && !capture) ? Score.prepare(p => { pAudio = p; showProgress(); }).catch(e => { console.warn(e); return null; }) : Promise.resolve(null);
   try {
-    await R.compileAll(p => { status.textContent = 'preparing ' + Math.round(p * 100) + '%'; });
+    await R.compileAll(p => { pShader = p; showProgress(); });
   } catch (e) {
     console.error(e); status.textContent = 'shader error — see console'; window.__error = e.message; return;
   }
@@ -61,6 +65,7 @@
   }
 
   // ---------------------------------------------------------------- start screen
+  await audioReady;
   status.textContent = '';
   ui.classList.add('ready');
   let t0 = 0, startAt = 0, paused = false, pauseT = 0;
@@ -76,7 +81,7 @@
 
   async function begin() {
     ui.classList.add('gone');
-    if (window.Score) {
+    if (window.Score && Score.buffer) {
       try { audio = await Score.start(startAt); } catch (e) { console.warn('audio failed', e); audio = null; }
     }
     t0 = performance.now();
