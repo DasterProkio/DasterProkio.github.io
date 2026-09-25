@@ -1,0 +1,40 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>spike: bowl look-dev</title>
+<style>html,body{margin:0;background:#000}canvas{display:block}</style></head>
+<body><canvas id="c" width="960" height="540"></canvas>
+<script src="../src/js/gl.js"></script>
+<script src="../src/js/bowl.js"></script>
+<script src="harness.js"></script>
+<script>
+(async () => {
+  const canvas = document.getElementById('c');
+  const sp = await makeSpike({ canvas, files: ['../src/glsl/common.glsl', '../src/glsl/bowl.glsl', '../src/glsl/bowlmat.glsl', 'bowl_scene.glsl'] });
+  const base = {
+    uProf: Bowl.packProfile(Bowl.FINAL), uFoot: Bowl.FOOT.stroke, uFootTh: Bowl.FOOT.th,
+    uWobble: 0.012, uOval: 0.015, uRidge: 0.0, uSpin: 0,
+    uWet: 0, uDry: 1, uGlazeRaw: 0, uMelt: 1, uHeat: 0, uAsh: 0.3, uCrackle: 1, uStain: 0, uGold: 0,
+    uSeeds: Bowl.packSeeds(),
+    uSunDir: GLX.v.norm([-1.0, 0.9, 0.6]), uSunCol: [3.2, 2.9, 2.5], uAmb: [0.05, 0.05, 0.055],
+    uFov: 0.32,
+  };
+  const presets = [
+    { name: 'celadon', cam: [1.2, 1.2, -2.0] },
+    { name: 'wet clay', cam: [1.2, 0.9, -2.0], uProf: Bowl.packProfile(Bowl.STAGES.THROWN), uFootTh: 0, uWet: 1, uDry: 0, uMelt: 0, uCrackle: 0, uAsh: 0, uRidge: 0.0025 },
+    { name: 'raw glaze', cam: [1.2, 1.2, -2.0], uGlazeRaw: 1, uMelt: 0, uCrackle: 0, uAsh: 0 },
+    { name: 'kiln hot', cam: [1.2, 1.2, -2.0], uHeat: 0.9, uMelt: 1, uCrackle: 0, uSunCol: [0.4, 0.2, 0.1], uAmb: [0.02, 0.008, 0.004] },
+    { name: 'stained+gold', cam: [0.4, 1.9, -1.6], uStain: 1, uGold: 1 },
+    { name: 'top-down', cam: [0.0, 2.8, -0.01], uStain: 0.6, uGold: 1 },
+  ];
+  window.__presets = presets.length;
+  window.__renderAt = (i) => {
+    const pr = Object.assign({}, base, presets[i]);
+    const target = [0, 0.33, 0];
+    pr.uCamPos = pr.cam;
+    pr.uCamRot = GLX.lookAt(pr.cam, target);
+    sp.render(pr, 1.0);
+    return presets[i].name;
+  };
+  window.__ready = true;
+  if (!location.search.includes('capture')) window.__renderAt(0);
+})().catch(e => { document.body.innerHTML = '<pre style="color:#f88">' + e.message + '</pre>'; window.__error = e.message; });
+</script></body></html>
